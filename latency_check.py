@@ -10,8 +10,13 @@ import time
 import json
 import urllib
 
-with open('latency_check.json', 'r') as config_file:
-    config = json.loads(config_file.read())
+# Load config
+try:
+    with open('latency_check.json', 'r') as config_file:
+        config = json.loads(config_file.read())
+except Exception as e:
+    print('load_config | ERROR | ' + str(e))
+    sys.exit(1)
 
 '''Start plagiarisation from https://github.com/samuel/python-ping'''
 
@@ -143,6 +148,12 @@ def do_one(dest_addr, timeout):
 
 
 def http_latency(host):
+    '''
+    Connect HTTP client to host and return latency.
+
+    :param host: hostname string
+    :return: latency in seconds as float
+    '''
     try:
         start = time.time()
         conn = urllib.urlopen('http://' + host)
@@ -155,23 +166,32 @@ def http_latency(host):
 
 
 def average_latency(proto, host, checks=config["check_count"], timeout=config["timeout"]):
+    '''
+    Return average latency of checks to host for given protocol.
+
+    :param proto: protocol string
+    :param host: hostname string
+    :param checks: number of checks to average as int
+    :param timeout: connection timeout in seconds as float
+    :return: average latency in seconds as float
+    '''
     latencies = []
     for check in range(0, checks):
         if proto == "icmp":
             result = do_one(host, timeout)
-            #print(' | '.join(['icmp_latency', 'DEBUG', host, str(timeout), str(result)]))
+            # print(' | '.join(['icmp_latency', 'DEBUG', host, str(timeout), str(result)]))
             if result:
                 latencies.append(result)
         elif proto == "http":
             result = http_latency(host)
-            #print(' | '.join(['http_latency', 'DEBUG', host, str(timeout), str(result)]))
+            # print(' | '.join(['http_latency', 'DEBUG', host, str(timeout), str(result)]))
             if result:
                 latencies.append(result)
         else:
             print('average_latency | ERROR | Unknown protocol: ' + proto)
             return
     avg_latency = sum(latencies) / float(len(latencies))
-    #print(' | '.join(['average_latency', 'DEBUG', str(latencies), str(avg_latency)]))
+    # print(' | '.join(['average_latency', 'DEBUG', str(latencies), str(avg_latency)]))
     return avg_latency
 
 
@@ -183,7 +203,21 @@ def send_graphite(
             graphite_port=config["graphite_port"],
             graphite_prefix=config["graphite_prefix"]
         ):
+    '''
+    Send a latency value to Graphite.
+
+    :param host: hostname as string
+    :param proto: protocol as string
+    :param latency: latency in seconds as float
+    :param graphite_host: graphite hostname as string
+    :param graphite_port: graphite port as int
+    :param graphite_prefix: graphite prefix as string
+    :return:
+    '''
     try:
+        # Line format:
+        # prefix.local_host.remote_host.protocol latency_in_seconds timestamp
+        # The regex here translates non-alphanumeric characters to underscores
         graphite_line = ' '.join([
             '.'.join([
                 graphite_prefix,
@@ -201,6 +235,6 @@ def send_graphite(
     except Exception as e:
         print('send_graphite | ERROR | ' + str(e))
 
-
+# Do the things
 for proto, host in config['to_check'].iteritems():
     send_graphite(host, proto, average_latency(proto, host))
