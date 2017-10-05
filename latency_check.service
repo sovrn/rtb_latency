@@ -1,0 +1,13 @@
+[Unit]
+Description=Latency Checker
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/latency_check
+ExecStart=/usr/bin/python2 /opt/latency_check/latency_check.py
+
+[Install]
+WantedBy=network-online.target

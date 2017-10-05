@@ -1,0 +1,1 @@
+* * * * * /usr/bin/python2 /opt/latency_check/latency_check.py | /usr/bin/logger -s

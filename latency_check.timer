@@ -1,0 +1,8 @@
+[Unit]
+Description=Latency Check
+
+[Timer]
+OnCalendar=minutely
+
+[Install]
+WantedBy=timers.target
