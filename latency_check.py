@@ -13,7 +13,7 @@ import urllib
 with open('latency_check.json', 'r') as config_file:
     config = json.loads(config_file.read())
 
-'''Start plagiarisation from https://github.com/samuel/python-ping/blob/master/ping.py'''
+'''Start plagiarisation from https://github.com/samuel/python-ping'''
 
 if sys.platform == "win32":
     # On Windows, the best timer is time.clock()
@@ -139,7 +139,7 @@ def do_one(dest_addr, timeout):
     return delay
 
 
-'''End plagiarisation from https://github.com/samuel/python-ping/blob/master/ping.py'''
+'''End plagiarisation from https://github.com/samuel/python-ping'''
 
 
 def http_latency(host):

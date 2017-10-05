@@ -16,7 +16,7 @@ As root, run:
 
 ```python latency_check.py```
 
-There are no configuration options. It will assume that `latency_check.json` is in the same directory as the script. Root is required for the Python sockets library to do ICMP things.
+There are no command-line flags, all configuration is done in `latency_check.json`. It will assume that `latency_check.json` is in the same directory as the script. Root is required for the Python sockets library to do ICMP things.
 
 ## Installation
 
