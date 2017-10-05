@@ -18,7 +18,7 @@ except Exception as e:
     print('load_config | ERROR | ' + str(e))
     sys.exit(1)
 
-'''Start plagiarisation from https://github.com/samuel/python-ping'''
+"""Start plagiarisation from https://github.com/samuel/python-ping"""
 
 if sys.platform == "win32":
     # On Windows, the best timer is time.clock()
@@ -144,16 +144,16 @@ def do_one(dest_addr, timeout):
     return delay
 
 
-'''End plagiarisation from https://github.com/samuel/python-ping'''
+"""End plagiarisation from https://github.com/samuel/python-ping"""
 
 
 def http_latency(host):
-    '''
+    """
     Connect HTTP client to host and return latency.
 
     :param host: hostname string
     :return: latency in seconds as float
-    '''
+    """
     try:
         start = time.time()
         conn = urllib.urlopen('http://' + host)
@@ -166,7 +166,7 @@ def http_latency(host):
 
 
 def average_latency(proto, host, checks=config["check_count"], timeout=config["timeout"]):
-    '''
+    """
     Return average latency of checks to host for given protocol.
 
     :param proto: protocol string
@@ -174,7 +174,7 @@ def average_latency(proto, host, checks=config["check_count"], timeout=config["t
     :param checks: number of checks to average as int
     :param timeout: connection timeout in seconds as float
     :return: average latency in seconds as float
-    '''
+    """
     latencies = []
     for check in range(0, checks):
         if proto == "icmp":
@@ -203,7 +203,7 @@ def send_graphite(
             graphite_port=config["graphite_port"],
             graphite_prefix=config["graphite_prefix"]
         ):
-    '''
+    """
     Send a latency value to Graphite.
 
     :param host: hostname as string
@@ -213,7 +213,7 @@ def send_graphite(
     :param graphite_port: graphite port as int
     :param graphite_prefix: graphite prefix as string
     :return:
-    '''
+    """
     try:
         # Line format:
         # prefix.local_host.remote_host.protocol latency_in_seconds timestamp
@@ -234,6 +234,7 @@ def send_graphite(
         graphite_connection.sendall(graphite_line)
     except Exception as e:
         print('send_graphite | ERROR | ' + str(e))
+
 
 # Do the things
 for proto, host in config['to_check'].iteritems():
