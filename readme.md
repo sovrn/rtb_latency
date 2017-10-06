@@ -34,7 +34,8 @@ There are no command-line flags, all configuration is done in `latency_check.jso
 }
 ```
 
-HTTP checks will also perform ICMP checks, so the inclusion of both above will result in ICMP being done twice.
+The `timeout` is in seconds, and `check_count` is how many times to check each host and return an average for.
+HTTP checks will also perform ICMP checks, so the inclusion of both as above will result in ICMP being done twice.
 
 ## Output format
 
