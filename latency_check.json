@@ -3,9 +3,9 @@
     "graphite_port": 2003,
     "graphite_prefix": "site_latency",
     "check_count": 5,
-    "timeout": 2,
-    "to_check": {
-        "icmp": "google.com",
-        "http": "google.com"
-    }
+    "timeout": 1,
+    "to_check": [
+        {"http": "http://google.com"},
+        {"icmp": "google.com"}
+    ]
 }

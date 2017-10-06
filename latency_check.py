@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import json
 import os
 import re
 import select
@@ -7,8 +8,7 @@ import socket
 import struct
 import sys
 import time
-import json
-import urllib
+import urllib2
 
 # Load config
 try:
@@ -147,22 +147,24 @@ def do_one(dest_addr, timeout):
 """End plagiarisation from https://github.com/samuel/python-ping"""
 
 
-def http_latency(host):
+def http_latency(host, timeout=config["timeout"]):
     """
     Connect HTTP client to host and return latency.
 
     :param host: hostname string
+    :param timeout: timeout in seconds as float
     :return: latency in seconds as float
     """
+    # print('http_latency | DEBUG | Opening connection to: ' + host)
     try:
         start = time.time()
-        conn = urllib.urlopen('http://' + host)
-        page = conn.read(0)
-        end = time.time()
+        conn = urllib2.urlopen(url=host, timeout=timeout)
+        conn.read(0)
         conn.close()
+        end = time.time()
         return end - start
     except Exception as e:
-        print('http_latency | ERROR | ' + str(e))
+        print('http_latency | ERROR | url=' + host + ' | ' + str(e))
 
 
 def average_latency(proto, host, checks=config["check_count"], timeout=config["timeout"]):
@@ -178,20 +180,31 @@ def average_latency(proto, host, checks=config["check_count"], timeout=config["t
     latencies = []
     for check in range(0, checks):
         if proto == "icmp":
-            result = do_one(host, timeout)
+            try:
+                result = do_one(host, timeout)
+            except Exception as e:
+                print('icmp_latency | ERROR | host=' + host + ' | ' + str(e))
+                return float('-1')
             # print(' | '.join(['icmp_latency', 'DEBUG', host, str(timeout), str(result)]))
             if result:
                 latencies.append(result)
+            else:
+                break
         elif proto == "http":
-            result = http_latency(host)
+            result = http_latency(host, timeout)
             # print(' | '.join(['http_latency', 'DEBUG', host, str(timeout), str(result)]))
             if result:
                 latencies.append(result)
+            else:
+                break
         else:
             print('average_latency | ERROR | Unknown protocol: ' + proto)
             return
-    avg_latency = sum(latencies) / float(len(latencies))
-    # print(' | '.join(['average_latency', 'DEBUG', str(latencies), str(avg_latency)]))
+    try:
+        avg_latency = sum(latencies) / float(len(latencies))
+    except:
+        avg_latency = float('-1')
+    # print(' | '.join(['average_latency', 'DEBUG', host, str(latencies), str(avg_latency)]))
     return avg_latency
 
 
@@ -218,11 +231,18 @@ def send_graphite(
         # Line format:
         # prefix.local_host.remote_host.protocol latency_in_seconds timestamp
         # The regex here translates non-alphanumeric characters to underscores
+        clean_lhost = re.sub(r'[^\w]', '_', socket.getfqdn())
+        if proto == 'http':
+            rhost = re.findall(r'(?<=\/\/)[\w.:\-]+', host)[0]
+        else:
+            rhost = host
+        clean_rhost = re.sub(r'[^\w]', '_', rhost)
+        # print(socket.getfqdn(), clean_lhost, host, rhost, clean_rhost)
         graphite_line = ' '.join([
             '.'.join([
                 graphite_prefix,
-                re.sub(r'[^\w]', '_', socket.getfqdn()),
-                re.sub(r'[^\w]', '_', host),
+                clean_lhost,
+                clean_rhost,
                 proto
             ]),
             str(latency),
@@ -237,5 +257,12 @@ def send_graphite(
 
 
 # Do the things
-for proto, host in config['to_check'].iteritems():
-    send_graphite(host, proto, average_latency(proto, host))
+for i in config['to_check']:
+    for proto, host in i.iteritems():
+        if proto == 'http':
+            send_graphite(host, 'http', average_latency('http', host))
+            send_graphite(host, 'icmp', average_latency('icmp', re.findall(r'(?<=\/\/)[\w.\-]+', host)[0]))
+        else:
+            send_graphite(host, proto, average_latency(proto, host))
+
+

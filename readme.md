@@ -22,9 +22,6 @@ There are no command-line flags, all configuration is done in `latency_check.jso
 
 To run this periodically, clone this repo into `/opt` and use either the provided Cron or SystemD scripts.
 
-## To-Do
-- Make `http_latency` obey the timeout value.
-
 ## Credit
 
 This script uses components from https://github.com/samuel/python-ping. It was written for Sovrn by Jeremy McCoy.
