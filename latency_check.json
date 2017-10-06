@@ -1,11 +1,10 @@
 {
-    "graphite_host": "perf1q.qadfw2.lijit.com",
+    "graphite_host": "graphite.example.com",
     "graphite_port": 2003,
     "graphite_prefix": "site_latency",
     "check_count": 5,
     "timeout": 1,
     "to_check": [
-        {"http": "http://google.com"},
-        {"icmp": "google.com"}
+        {"http": "http://google.com"}
     ]
 }

@@ -18,6 +18,30 @@ As root, run:
 
 There are no command-line flags, all configuration is done in `latency_check.json`. It will assume that `latency_check.json` is in the same directory as the script. Root is required for the Python sockets library to do ICMP things.
 
+## Config format
+
+```
+{
+    "graphite_host": "hostname.domain.com",
+    "graphite_port": 2003,
+    "graphite_prefix": "site_latency",
+    "check_count": 5,
+    "timeout": 1,
+    "to_check": [
+        {"icmp": "google.com"},
+        {"http": "http://google.com"}
+    ]
+}
+```
+
+HTTP checks will also perform ICMP checks, so the inclusion of both above will result in ICMP being done twice.
+
+## Output format
+
+In Graphite, you should expect to see `<prefix>.<source_hostname>.<destination_hostname>.<protocol>` which will be an integer value in milliseconds.
+In the case of a failed check, a value of -1 will be sent to Graphite.
+Errors will be logged to stdout.
+
 ## Installation
 
 To run this periodically, clone this repo into `/opt` and use either the provided Cron or SystemD scripts.

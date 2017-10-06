@@ -170,6 +170,8 @@ def http_latency(host, timeout=config["timeout"]):
 def average_latency(proto, host, checks=config["check_count"], timeout=config["timeout"]):
     """
     Return average latency of checks to host for given protocol.
+    Errors will break the loop and an average will be calculated of whatever data we have.
+    If that doesn't work, it will return '-1'.
 
     :param proto: protocol string
     :param host: hostname string
@@ -229,15 +231,20 @@ def send_graphite(
     """
     try:
         # Line format:
-        # prefix.local_host.remote_host.protocol latency_in_seconds timestamp
-        # The regex here translates non-alphanumeric characters to underscores
-        clean_lhost = re.sub(r'[^\w]', '_', socket.getfqdn())
-        if proto == 'http':
+        # prefix.local_host.remote_host.protocol latency_in_milliseconds timestamp
+        # The regex here extracts the hostname from URLs and translates non-alphanumeric characters to underscores
+        if 'http' in host:
             rhost = re.findall(r'(?<=\/\/)[\w.:\-]+', host)[0]
         else:
             rhost = host
         clean_rhost = re.sub(r'[^\w]', '_', rhost)
-        # print(socket.getfqdn(), clean_lhost, host, rhost, clean_rhost)
+        clean_lhost = re.sub(r'[^\w]', '_', socket.getfqdn())
+        if latency == float('-1'):
+            # Keep '-1' error values
+            clean_latency = str(latency)
+        else:
+            # Convert float of seconds to int of milliseconds
+            clean_latency = str(int(latency * 1000))
         graphite_line = ' '.join([
             '.'.join([
                 graphite_prefix,
@@ -245,13 +252,13 @@ def send_graphite(
                 clean_rhost,
                 proto
             ]),
-            str(latency),
+            clean_latency,
             str(int(time.time()))
         ])
         print('send_graphite | DEBUG | line: ' + graphite_line)
-        graphite_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        graphite_connection.connect((graphite_host, graphite_port))
-        graphite_connection.sendall(graphite_line)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as graphite_connection:
+            graphite_connection.connect((graphite_host, graphite_port))
+            graphite_connection.sendall(graphite_line)
     except Exception as e:
         print('send_graphite | ERROR | ' + str(e))
 
@@ -261,12 +268,6 @@ for i in config['to_check']:
     for proto, host in i.iteritems():
         if proto == 'http':
             send_graphite(host, 'http', average_latency('http', host))
-            send_graphite(
-                re.findall(r'(?<=\/\/)[\w.\-]+', host)[0],
-                'icmp',
-                average_latency('icmp', re.findall(r'(?<=\/\/)[\w.\-]+', host)[0])
-            )
+            send_graphite(host, 'icmp', average_latency('icmp', re.findall(r'(?<=\/\/)[\w.\-]+', host)[0]))
         else:
             send_graphite(host, proto, average_latency(proto, host))
-
-
