@@ -261,7 +261,11 @@ for i in config['to_check']:
     for proto, host in i.iteritems():
         if proto == 'http':
             send_graphite(host, 'http', average_latency('http', host))
-            send_graphite(host, 'icmp', average_latency('icmp', re.findall(r'(?<=\/\/)[\w.\-]+', host)[0]))
+            send_graphite(
+                re.findall(r'(?<=\/\/)[\w.\-]+', host)[0],
+                'icmp',
+                average_latency('icmp', re.findall(r'(?<=\/\/)[\w.\-]+', host)[0])
+            )
         else:
             send_graphite(host, proto, average_latency(proto, host))
 
