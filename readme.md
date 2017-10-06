@@ -22,7 +22,7 @@ There are no command-line flags, all configuration is done in `latency_check.jso
 
 ```
 {
-    "graphite_host": "hostname.domain.com",
+    "graphite_host": "graphite.example.com",
     "graphite_port": 2003,
     "graphite_prefix": "site_latency",
     "check_count": 5,
