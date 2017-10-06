@@ -256,9 +256,9 @@ def send_graphite(
             str(int(time.time()))
         ])
         print('send_graphite | DEBUG | line: ' + graphite_line)
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as graphite_connection:
-            graphite_connection.connect((graphite_host, graphite_port))
-            graphite_connection.sendall(graphite_line)
+        graphite_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        graphite_connection.connect((graphite_host, graphite_port))
+        graphite_connection.sendall(graphite_line)
     except Exception as e:
         print('send_graphite | ERROR | ' + str(e))
 
