@@ -1,6 +1,6 @@
 # latency_check.py
 
-A simple tool to check the average latency between hosts with HTTP or ICMP and send the results to Graphite. It was created to serve as an alternative to Smokeping.
+A simple tool to check the average latency between hosts with HTTP or ICMP and send the results to Graphite. It was created to serve as an alternative to SmokePing.
 
 ## System requirements
 
@@ -8,15 +8,14 @@ You must have Python 2.7.x to use this script. Other versions may work, but are 
 
 ## Configuration
 
-Edit `latency_check.json` to adjust the default values to your liking and add `"protocol": "host"` pairs to the `to_check` list.
+Edit `latency_check.json` to adjust the default values to your liking and add `{"protocol": "host"},` pairs to the `to_check` list.
 
 ## Usage
 
-As root, run:
+As root, run: `python latency_check.py`
 
-```python latency_check.py```
-
-There are no command-line flags, all configuration is done in `latency_check.json`. It will assume that `latency_check.json` is in the same directory as the script. Root is required for the Python sockets library to do ICMP things.
+There are no command-line flags, all configuration is done in `latency_check.json`. The script will assume that `latency_check.json` is in the same directory as the script.
+[Running as root is required for the Python sockets library to do ICMP things](https://stackoverflow.com/questions/1189389/python-non-privileged-icmp).
 
 ## Config format
 
@@ -35,7 +34,7 @@ There are no command-line flags, all configuration is done in `latency_check.jso
 ```
 
 The `timeout` is in seconds, and `check_count` is how many times to check each host and return an average for.
-HTTP checks will also perform ICMP checks, so the inclusion of both as above will result in ICMP being done twice.
+HTTP check entries will also perform ICMP checks, so the inclusion of both as above will result in ICMP being done twice.
 
 ## Output format
 
@@ -49,7 +48,8 @@ To run this periodically, clone this repo into `/opt` and use either the provide
 
 ## Credit
 
-This script uses components from https://github.com/samuel/python-ping. It was written for Sovrn by Jeremy McCoy.
+This script uses components from https://github.com/samuel/python-ping.
+It was written for Sovrn by Jeremy McCoy (@MrDrMcCoy).
 
 ## License
 
