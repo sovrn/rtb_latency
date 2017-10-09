@@ -12,11 +12,15 @@ import urllib2
 
 # Load config
 try:
-    with open('latency_check.json', 'r') as config_file:
+    with open(sys.argv[1], 'r') as config_file:
         config = json.loads(config_file.read())
-except Exception as e:
-    print('load_config | ERROR | ' + str(e))
-    sys.exit(1)
+except:
+    try:
+        with open('latency_check.json', 'r') as config_file:
+            config = json.loads(config_file.read())
+    except Exception as e:
+        print('load_config | ERROR | ' + str(e))
+        sys.exit(1)
 
 """Start plagiarisation from https://github.com/samuel/python-ping"""
 
