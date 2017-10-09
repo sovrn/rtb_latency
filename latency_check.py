@@ -9,13 +9,24 @@ import struct
 import sys
 import time
 import urllib2
+import inspect
+
+
+def logbro(message, level='debug'):
+    this_script = os.path.basename(__file__)
+    calling_function = inspect.stack()[1][3]
+    print(' | '.join([this_script, level, calling_function, message]))
+
 
 # Load config
 try:
     with open(sys.argv[1], 'r') as config_file:
         config = json.loads(config_file.read())
 except Exception as e:
-    print('load_config | ERROR | ' + str(e))
+    if len(sys.argv) > 1:
+        logbro('Trouble opening config file: ' + str(e), 'error')
+    else:
+        logbro('Config file not specified.', 'error')
     sys.exit(1)
 
 """Start plagiarizing from https://github.com/samuel/python-ping"""
@@ -155,7 +166,7 @@ def http_latency(host, timeout=config["timeout"]):
     :param timeout: timeout in seconds as float
     :return: latency in seconds as float
     """
-    # print('http_latency | DEBUG | Opening connection to: ' + host)
+    # logbro('Opening connection to: ' + host)
     try:
         start = time.time()
         conn = urllib2.urlopen(url=host, timeout=timeout)
@@ -164,7 +175,7 @@ def http_latency(host, timeout=config["timeout"]):
         end = time.time()
         return end - start
     except Exception as e:
-        print('http_latency | ERROR | url=' + host + ' | ' + str(e))
+        logbro(str(e) + ' | url=' + host, 'error')
 
 
 def average_latency(proto, host, checks=config["check_count"], timeout=config["timeout"]):
@@ -185,28 +196,25 @@ def average_latency(proto, host, checks=config["check_count"], timeout=config["t
             try:
                 result = do_one(host, timeout)
             except Exception as e:
-                print('icmp_latency | ERROR | host=' + host + ' | ' + str(e))
+                logbro('host=' + host + ' | ' + str(e), 'error')
                 return float('-1')
-            # print(' | '.join(['icmp_latency', 'DEBUG', host, str(timeout), str(result)]))
             if result:
                 latencies.append(result)
             else:
                 break
         elif proto == "http":
             result = http_latency(host, timeout)
-            # print(' | '.join(['http_latency', 'DEBUG', host, str(timeout), str(result)]))
             if result:
                 latencies.append(result)
             else:
                 break
         else:
-            print('average_latency | ERROR | Unknown protocol: ' + proto)
+            logbro('Unknown protocol: ' + proto, 'error')
             return
     try:
         avg_latency = sum(latencies) / float(len(latencies))
     except:
         avg_latency = float('-1')
-    # print(' | '.join(['average_latency', 'DEBUG', host, str(latencies), str(avg_latency)]))
     return avg_latency
 
 
@@ -255,12 +263,12 @@ def send_graphite(
             clean_latency,
             str(int(time.time()))
         ])
-        print('send_graphite | DEBUG | line: ' + graphite_line)
+        # logbro('line: ' + graphite_line)
         graphite_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         graphite_connection.connect((graphite_host, graphite_port))
         graphite_connection.sendall(graphite_line)
     except Exception as e:
-        print('send_graphite | ERROR | ' + str(e))
+        logbro(str(e), 'error')
 
 
 # Do the things
