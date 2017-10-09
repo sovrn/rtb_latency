@@ -1,0 +1,11 @@
+[Unit]
+Description=Latency Checker
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python2 {{lc_install_dir}}/latency_check.py {{lc_install_dir}}/latency_check.json
+
+[Install]
+WantedBy=network-online.target

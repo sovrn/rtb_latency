@@ -1,0 +1,6 @@
+---
+
+lc_graphite_host: graphite.example.com
+lc_graphite_port: 2003
+lc_graphite_prefix: site_latency
+lc_install_dir: /opt/latency_check

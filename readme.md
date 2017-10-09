@@ -12,9 +12,11 @@ Edit `latency_check.json` to adjust the default values to your liking and add `{
 
 ## Usage
 
-As root, run: `python latency_check.py`
+As root, run: `python latency_check.py latency_check.json`
 
-There are no command-line flags, all configuration is done in `latency_check.json`. The script will assume that `latency_check.json` is in the same directory as the script.
+The path to the config file is required.
+There are no other command-line flags, all configuration is done in `latency_check.json`.
+
 [Running as root is required for the Python sockets library to do ICMP things](https://stackoverflow.com/questions/1189389/python-non-privileged-icmp).
 
 ## Config format
@@ -38,13 +40,17 @@ HTTP check entries will also perform ICMP checks, so the inclusion of both as ab
 
 ## Output format
 
-In Graphite, you should expect to see `<prefix>.<source_hostname>.<destination_hostname>.<protocol>` which will be an integer value in milliseconds.
+In Graphite, you should expect to see `<graphite_prefix>.<source_hostname>.<destination_hostname>.<protocol>` which will be an integer value in milliseconds.
+
 In the case of a failed check, a value of -1 will be sent to Graphite.
-Errors will be logged to stdout.
+
+Errors will be logged to stdout, which will be captured by syslog or SystemD if you use the supplied scripts.
 
 ## Installation
 
-To run this periodically, clone this repo into `/opt` and use either the provided Cron or SystemD scripts.
+To run this periodically, clone this repo into `/opt` and use the example Ansible playbook/role to deploy it.
+
+If you are not using Ansible, template files for cron and SystemD are under `supplements/`.
 
 ## Credit
 

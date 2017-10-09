@@ -1,0 +1,16 @@
+# Instructions for use on a SystemD-based linux distribution:
+# 1. Modify this (if needed) and copy it to /etc/systemd/system/
+# 2. Execute `systemctl daemon-reload`
+# 3. Execute `systemctl enable latency_check.timer`
+# 4. Execute `systemctl start  latency_check.timer`
+# 5. Execute `systemctl status latency_check.timer`
+# 6. Ensure that the same was done for latency_check.service and that it has no errors.
+
+[Unit]
+Description=Latency Check
+
+[Timer]
+OnCalendar=*:0/5
+
+[Install]
+WantedBy=timers.target

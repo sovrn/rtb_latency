@@ -1,0 +1,74 @@
+---
+
+- name: Clone latency_check repo locally
+  delegate_to: 127.0.0.1
+  run_once: yes
+  git:
+    repo: https://github.com/sovrn/latency_check.git
+    dest: /tmp/latency_check
+    accept_hostkey: yes
+  tags:
+    - latency_check
+
+- name: Compress latency_check repo
+  delegate_to: 127.0.0.1
+  run_once: yes
+  archive:
+    path: /tmp/latency_check
+    dest: /tmp/latency_check.tgz
+  tags:
+    - latency_check
+
+- name: Create latency_check destination directory
+  file:
+    path: "{{lc_install_dir}}"
+    state: directory
+  tags:
+    - latency_check
+
+- name: Extract latency_check archive
+  unarchive:
+    src: /tmp/latency_check.tgz
+    dest: "{{lc_install_dir}}/../"
+  tags:
+    - latency_check
+
+- name: Copy latency_check configuration
+  template:
+    src: opt/latency_check/latency_check.json.j2
+    dest: "{{lc_install_dir}}/latency_check.json"
+  tags:
+    - latency_check
+
+- name: Install latency_check SystemD files
+  template:
+    src: "{{item}}"
+    dest: /etc/systemd/system/
+  with_items:
+    - etc/systemd/system/latency_check.service
+    - etc/systemd/system/latency_check.timer
+  when: ansible_service_mgr == 'systemd'
+  tags:
+    - latency_check
+
+- name: Activate latency_check SystemD script
+  systemd:
+    name: "{{item}}"
+    state: started
+    enabled: yes
+    daemon_reload: yes
+  with_items:
+    - latency_check.service
+    - latency_check.timer
+  when: ansible_service_mgr == 'systemd'
+  tags:
+    - latency_check
+
+- name: Install latency_check Cron job
+  cron:
+    job: /usr/bin/python2 {{lc_install_dir}}/latency_check.py {{lc_install_dir}}/latency_check.json | /usr/bin/logger
+    name: latency_check
+    minute: "*/5"
+  when: ansible_service_mgr != 'systemd'
+  tags:
+    - latency_check
