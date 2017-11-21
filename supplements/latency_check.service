@@ -13,7 +13,7 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python2 /opt/latency_check/latency_check.py /opt/latency_check/latency_check.json
+ExecStart=/usr/bin/python2 /opt/latency_check/latency_check.py
 
 [Install]
 WantedBy=network-online.target

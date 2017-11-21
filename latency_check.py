@@ -3,213 +3,275 @@
 import json
 import os
 import re
-import select
 import socket
-import struct
 import sys
 import time
 import urllib2
 import inspect
+import ping
+import uuid
+import requests
+import itertools
 
 
 def logbro(message, level='debug'):
-    this_script = os.path.basename(__file__)
-    calling_function = inspect.stack()[1][3]
-    print(' | '.join([this_script, level, calling_function, message]))
+    """
+    Simple console logger that prints the function that called it along with your message.
+
+    :param message:
+    :param level:
+    :return:
+    """
+    try:
+        this_script = os.path.basename(__file__)
+        calling_function = inspect.stack()[1][3]
+        print(' | '.join([this_script, level, calling_function, message]))
+    except:
+        print(message)
 
 
-# Load config
-try:
-    with open(sys.argv[1], 'r') as config_file:
-        config = json.loads(config_file.read())
-except Exception as e:
-    if len(sys.argv) > 1:
-        logbro('Trouble opening config file: ' + str(e), 'error')
+def extract_hostname(string):
+    """
+    Extract FQDN or IP from a full URL
+
+    :param string: A URL as a string
+    :return: FQDN or IP as a string
+    """
+    if '//' in string:
+        return re.findall(r'(?<=//)[\w.\-]+', string)[0]
     else:
-        logbro('Config file not specified.', 'error')
-    sys.exit(1)
-
-"""Start plagiarizing from https://github.com/samuel/python-ping"""
-
-if sys.platform == "win32":
-    # On Windows, the best timer is time.clock()
-    default_timer = time.clock
-else:
-    # On most other platforms the best timer is time.time()
-    default_timer = time.time
-
-# From /usr/include/linux/icmp.h; your milage may vary.
-ICMP_ECHO_REQUEST = 8 # Seems to be the same on Solaris.
+        return string
 
 
-def checksum(source_string):
+def graphite_safe(string):
     """
-    I'm not too confident that this is right but testing seems
-    to suggest that it gives the same answers as in_cksum in ping.c
+    Sanitizes a string so that it can be used as part of a Graphite line.
+
+    :param string: Your string to sanitize
+    :return: Your sanitized string
     """
-    sum = 0
-    countTo = (len(source_string)/2)*2
-    count = 0
-    while count<countTo:
-        thisVal = ord(source_string[count + 1])*256 + ord(source_string[count])
-        sum = sum + thisVal
-        sum = sum & 0xffffffff # Necessary?
-        count = count + 2
-
-    if countTo<len(source_string):
-        sum = sum + ord(source_string[len(source_string) - 1])
-        sum = sum & 0xffffffff # Necessary?
-
-    sum = (sum >> 16)  +  (sum & 0xffff)
-    sum = sum + (sum >> 16)
-    answer = ~sum
-    answer = answer & 0xffff
-
-    # Swap bytes. Bugger me if I know why.
-    answer = answer >> 8 | (answer << 8 & 0xff00)
-
-    return answer
+    # Convert whitespaces to underscores
+    string = re.sub(r'\s', '_', string)
+    # Convert non-alphanumeric characters to underscores
+    string = re.sub(r'[^\w]', '_', string)
+    # Collapse repeating characters into one
+    string = ''.join(ch for ch, _ in itertools.groupby(string))
+    return string
 
 
-def receive_one_ping(my_socket, ID, timeout):
+def genconfig():
     """
-    receive the ping from the socket.
+    Reads config from file and further populates config with dynamic data.
+
+    :return: config as dict
     """
-    timeLeft = timeout
-    while True:
-        startedSelect = default_timer()
-        whatReady = select.select([my_socket], [], [], timeLeft)
-        howLongInSelect = (default_timer() - startedSelect)
-        if whatReady[0] == []: # Timeout
-            return
-
-        timeReceived = default_timer()
-        recPacket, addr = my_socket.recvfrom(1024)
-        icmpHeader = recPacket[20:28]
-        type, code, checksum, packetID, sequence = struct.unpack(
-            "bbHHh", icmpHeader
-        )
-        # Filters out the echo request itself. 
-        # This can be tested by pinging 127.0.0.1 
-        # You'll see your own request
-        if type != 8 and packetID == ID:
-            bytesInDouble = struct.calcsize("d")
-            timeSent = struct.unpack("d", recPacket[28:28 + bytesInDouble])[0]
-            return timeReceived - timeSent
-
-        timeLeft = timeLeft - howLongInSelect
-        if timeLeft <= 0:
-            return
-
-
-def send_one_ping(my_socket, dest_addr, ID):
-    """
-    Send one ping to the given >dest_addr<.
-    """
-    dest_addr  =  socket.gethostbyname(dest_addr)
-
-    # Header is type (8), code (8), checksum (16), id (16), sequence (16)
-    my_checksum = 0
-
-    # Make a dummy heder with a 0 checksum.
-    header = struct.pack("bbHHh", ICMP_ECHO_REQUEST, 0, my_checksum, ID, 1)
-    bytesInDouble = struct.calcsize("d")
-    data = (192 - bytesInDouble) * "Q"
-    data = struct.pack("d", default_timer()) + data
-
-    # Calculate the checksum on the data and the dummy header.
-    my_checksum = checksum(header + data)
-
-    # Now that we have the right checksum, we put that in. It's just easier
-    # to make up a new header than to stuff it into the dummy.
-    header = struct.pack(
-        "bbHHh", ICMP_ECHO_REQUEST, 0, socket.htons(my_checksum), ID, 1
-    )
-    packet = header + data
-    my_socket.sendto(packet, (dest_addr, 1)) # Don't know about the 1
-
-
-def do_one(dest_addr, timeout):
-    """
-    Returns either the delay (in seconds) or none on timeout.
-    """
-    icmp = socket.getprotobyname("icmp")
+    # Open config file
     try:
-        my_socket = socket.socket(socket.AF_INET, socket.SOCK_RAW, icmp)
-    except socket.error, (errno, msg):
-        if errno == 1:
-            # Operation not permitted
-            msg = msg + (
-                " - Note that ICMP messages can only be sent from processes"
-                " running as root."
-            )
-            raise socket.error(msg)
-        raise # raise the original error
-
-    my_ID = os.getpid() & 0xFFFF
-
-    send_one_ping(my_socket, dest_addr, my_ID)
-    delay = receive_one_ping(my_socket, my_ID, timeout)
-
-    my_socket.close()
-    return delay
-
-
-"""End plagiarizing from https://github.com/samuel/python-ping"""
-
-
-def http_latency(host, timeout=config["timeout"]):
-    """
-    Connect HTTP client to host and return latency.
-
-    :param host: hostname string
-    :param timeout: timeout in seconds as float
-    :return: latency in seconds as float
-    """
-    # logbro('Opening connection to: ' + host)
-    try:
-        start = time.time()
-        conn = urllib2.urlopen(url=host, timeout=timeout)
-        conn.read(0)
-        conn.close()
-        end = time.time()
-        return end - start
+        with open('config.json', 'r') as config_file:
+            config = json.loads(config_file.read())
     except Exception as e:
-        logbro(str(e) + ' | url=' + host, 'error')
+        logbro('Trouble opening config file: ' + str(e), 'error')
+        sys.exit(1)
+    # Get public IP
+    try:
+        pubiprequest = urllib2.urlopen(url='https://api.ipify.org')
+        config['public_ip'] = pubiprequest.read()
+        pubiprequest.close()
+    except Exception as e:
+        logbro('Error getting public IP from ipify.org: ' + str(e), 'error')
+    # Get GeoIP info
+    try:
+        geoiprequest = urllib2.urlopen(url='http://freegeoip.net/json/' + config['public_ip'])
+        config['geoip'] = json.loads(geoiprequest.read())
+        geoiprequest.close()
+    except Exception as e:
+        logbro('Error getting public IP from ipify.org: ' + str(e), 'error')
+    return config
 
 
-def average_latency(proto, host, checks=config["check_count"], timeout=config["timeout"]):
+config = genconfig()
+
+
+def build_host_dict():
+    """
+    Generates host list from sources defined in config file.
+    Example output:
+        {
+            'provider_name': {
+                'region_name': 'url',
+                ...
+            },
+            ...
+        }
+
+    :return: Providers as dict
+    """
+    checks = {}
+    for id, source in enumerate(config['load_hosts']):
+        if config['load_hosts'][id]['method'] == 'file':
+            try:
+                filepath = config['load_hosts'][id]['path']
+                logbro('Loading hosts from JSON file: ' + filepath)
+                checks.update(json.loads(open(filepath, 'r').read()))
+            except Exception as e:
+                logbro('Could not open JSON host file: ' + filepath + '\n' + str(e), 'error')
+        elif config['load_hosts'][id]['method'] == 'mysql':
+            try:
+                import pymysql
+                mysql_db = config['load_hosts'][id]['mysql_db']
+                mysql_query = config['load_hosts'][id]['mysql_query']
+                mysql_conn = pymysql.cursors.DictCursor(pymysql.connect(
+                    host=config['load_hosts'][id]['mysql_host'],
+                    user=config['load_hosts'][id]['mysql_user'],
+                    passwd=config['load_hosts'][id]['mysql_pass'],
+                    database=mysql_db
+                ))
+                logbro('Loading hosts from MySQL DB: ' + mysql_db)
+                result_count = mysql_conn.execute(mysql_query)
+                result_dict = mysql_conn.fetchall()
+                for id, row in enumerate(result_dict):
+                    provider = result_dict[id]['provider_name']
+                    if provider not in checks:
+                        checks[provider] = {}
+                    for region in result_dict[id]:
+                        if 'http' in result_dict[id][region]:
+                            checks[provider][region] = result_dict[id][region]
+            except Exception as e:
+                logbro('Could not load hosts from MySQL: ' + str(e), 'error')
+        else:
+            logbro('Unknown source type for hosts: ' + source, 'error')
+        # Some of the providers gathered from MySQL may be empty, so we should remove them.
+        emptykeys = []
+        for key in checks:
+            if checks[key] == {}:
+                emptykeys.append(key)
+        for key in emptykeys:
+            del checks[key]
+    return checks
+
+
+def genbid():
+    """
+    Generates a unique test bid compliant with OpenRTB 2.3
+
+    :return: JSON body as string
+    """
+    return json.dumps({
+        "ext": {
+            "pchain": config['rtb']['bid_ext_pchain']
+        },
+        "id": str(uuid.uuid4()),
+        "test": 1,
+        "imp": [{
+            "id": "1",
+            "banner": {
+                "w": 160,
+                "h": 600,
+                "pos": 3
+            },
+            "secure": 0
+        }],
+        "site": {
+            "id": "1",
+            "domain": config['rtb']['bid_site_domain'],
+            "page": config['rtb']['bid_site_page'],
+            "publisher": {
+                "id": config['rtb']['bid_site_publisher_id']
+            }
+        },
+        "device": {
+            "dnt": 0,
+            "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_12_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.78 Safari/537.36",
+            "ip": config['public_ip'],
+            "geo": {
+                "lat": config['geoip']['latitude'],
+                "lon": config['geoip']['longitude'],
+                "country": config['geoip']['country_code'],
+                "region": config['geoip']['region_code'],
+                "city": config['geoip']['city'],
+                "zip": config['geoip']['zip_code'],
+                "type": 2
+            },
+            "language": "en",
+            "os": "OS X",
+            "devicetype": 2,
+            "osv": "10.12.6"
+        },
+        "user": {
+            "id": config['rtb']['bid_user_id']
+        },
+        "at": 2
+    })
+
+
+def rtb_latency(host):
+    """
+    Sends test RTB bid to host.
+
+    :param host: Hostname as string
+    :return: Timestamp as float of seconds or nothing
+    """
+    # logbro('Sending test bid to: ' + host)
+    try:
+        s = requests.Session()
+        s.mount('http://', requests.adapters.HTTPAdapter(max_retries=1))
+        s.mount('https://', requests.adapters.HTTPAdapter(max_retries=1))
+        start = time.time()
+        req = s.post(
+            host,
+            data=genbid(),
+            timeout=config['timeout'],
+            headers=config['rtb']['headers']
+        )
+        end = time.time()
+        if req.status_code == 204 or req.status_code == requests.codes.ok:
+            return end - start
+        else:
+            logbro('Provider returned error: ' + str(req.status_code) + str(req.text), 'warning')
+    except Exception as e:
+        logbro(str(e), 'error')
+
+
+def icmp_latency(host):
+    """
+    Pings a host. Requires script to be run as root in order to function.
+
+    :param host: Hostname as string
+    :return: Timestamp as float of seconds or nothing
+    """
+    # logbro('Pinging host: ' + host)
+    try:
+        return ping.do_one(host, config['timeout'])
+    except Exception as e:
+        logbro('host=' + extract_hostname(host) + ' | ' + str(e), 'error')
+
+
+def average_latency(host, protocol):
     """
     Return average latency of checks to host for given protocol.
     Errors will break the loop and an average will be calculated of whatever data we have.
     If that doesn't work, it will return '-1'.
 
-    :param proto: protocol string
     :param host: hostname string
-    :param checks: number of checks to average as int
-    :param timeout: connection timeout in seconds as float
+    :param protocol: protocol string
     :return: average latency in seconds as float
     """
     latencies = []
-    for check in range(0, checks):
-        if proto == "icmp":
-            try:
-                result = do_one(host, timeout)
-            except Exception as e:
-                logbro('host=' + host + ' | ' + str(e), 'error')
-                return float('-1')
+    for count in range(0, config['check_count']):
+        if protocol == "icmp":
+            result = icmp_latency(extract_hostname(host))
             if result:
                 latencies.append(result)
             else:
                 break
-        elif proto == "http":
-            result = http_latency(host, timeout)
+        elif protocol == "rtb":
+            result = rtb_latency(host)
             if result:
                 latencies.append(result)
             else:
                 break
         else:
-            logbro('Unknown protocol: ' + proto, 'error')
+            logbro('Unknown protocol: ' + protocol, 'error')
             return
     try:
         avg_latency = sum(latencies) / float(len(latencies))
@@ -219,63 +281,76 @@ def average_latency(proto, host, checks=config["check_count"], timeout=config["t
 
 
 def send_graphite(
-            host,
-            proto,
+            provider,
+            protocol,
             latency,
+            remote_region,
             graphite_host=config["graphite_host"],
             graphite_port=config["graphite_port"],
             graphite_prefix=config["graphite_prefix"]
         ):
     """
-    Send a latency value to Graphite.
+    Send a latency metric to Graphite.
 
-    :param host: hostname as string
-    :param proto: protocol as string
+    :param provider: provider name as string
+    :param protocol: protocol as string
     :param latency: latency in seconds as float
+    :param remote_region: geographic region of remote system as string
     :param graphite_host: graphite hostname as string
     :param graphite_port: graphite port as int
     :param graphite_prefix: graphite prefix as string
-    :return:
+    :return: Nope
     """
     try:
         # Line format:
-        # prefix.local_host.remote_host.protocol latency_in_milliseconds timestamp
-        # The regex here extracts the hostname from URLs and translates non-alphanumeric characters to underscores
-        if 'http' in host:
-            rhost = re.findall(r'(?<=//)[\w.:\-]+', host)[0]
-        else:
-            rhost = host
-        clean_rhost = re.sub(r'[^\w]', '_', rhost)
-        clean_lhost = re.sub(r'[^\w]', '_', socket.getfqdn())
+        #     prefix.provider.remote_region.local_host.protocol latency_in_milliseconds timestamp
         if latency == float('-1'):
             # Keep '-1' error values
             clean_latency = str(latency)
         else:
             # Convert float of seconds to int of milliseconds
             clean_latency = str(int(latency * 1000))
+        # Construct line
         graphite_line = ' '.join([
             '.'.join([
-                graphite_prefix,
-                clean_lhost,
-                clean_rhost,
-                proto
+                graphite_safe(graphite_prefix),
+                graphite_safe(provider),
+                graphite_safe(remote_region),
+                graphite_safe(socket.getfqdn()),
+                graphite_safe(protocol)
             ]),
             clean_latency,
             str(int(time.time()))
         ])
         # logbro('line: ' + graphite_line)
+        # Send line
         graphite_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         graphite_connection.connect((graphite_host, graphite_port))
         graphite_connection.sendall(graphite_line)
     except Exception as e:
-        logbro(str(e), 'error')
+        return  # logbro(str(e), 'error')
 
 
-# Do the things
-for i in config['to_check']:
-    for proto, host in i.iteritems():
-        if proto == 'http':
-            send_graphite(host, 'http', average_latency('http', host))
-            send_graphite(host, 'icmp', average_latency('icmp', re.findall(r'(?<=//)[\w.\-]+', host)[0]))
-        else:
-            send_graphite(host, proto, average_latency(proto, host))
+def main_loop(host_dict):
+    """
+    This function loops through a dictionary of hosts and runs the other functions against them.
+
+    :param host_dict:
+    :return: Nope
+    """
+    for provider in host_dict:
+        logbro('Checking provider: ' + provider)
+        for region in host_dict[provider]:
+            for protocol in config['check_types']:
+                send_graphite(
+                    provider=provider,
+                    protocol=protocol,
+                    remote_region=region,
+                    latency=average_latency(
+                        host=host_dict[provider][region],
+                        protocol=protocol
+                    )
+                )
+
+
+main_loop(build_host_dict())

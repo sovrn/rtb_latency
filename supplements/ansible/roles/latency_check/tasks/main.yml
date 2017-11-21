@@ -35,8 +35,8 @@
 
 - name: Copy latency_check configuration
   template:
-    src: opt/latency_check/latency_check.json.j2
-    dest: "{{lc_install_dir}}/latency_check.json"
+    src: opt/latency_check/config.json.j2
+    dest: "{{lc_install_dir}}/config.json"
   tags:
     - latency_check
 
@@ -66,7 +66,7 @@
 
 - name: Install latency_check Cron job
   cron:
-    job: /usr/bin/python2 {{lc_install_dir}}/latency_check.py {{lc_install_dir}}/latency_check.json | /usr/bin/logger
+    job: /usr/bin/python2 {{lc_install_dir}}/latency_check.py {{lc_install_dir}}/config.json | /usr/bin/logger
     name: latency_check
     minute: "*/5"
   when: ansible_service_mgr != 'systemd'

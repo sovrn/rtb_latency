@@ -1,8 +1,8 @@
 {
-    "graphite_host": "{{lc_graphite_host}}",
-    "graphite_port": {{lc_graphite_port}},
-    "graphite_prefix": "{{lc_graphite_prefix}}",
-    "check_count": 5,
+    "graphite_host": "graphite.example.com",
+    "graphite_port": 2003,
+    "graphite_prefix": "site_latency",
+    "check_count": 3,
     "timeout": 1,
     "load_hosts": [
         {
