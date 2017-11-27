@@ -43,6 +43,7 @@ There are no command-line flags, all configuration is done in `config.json`.
     ],
     "check_types": [
         "rtb",
+        "get",
         "icmp"
     ],
     "rtb": {
@@ -64,7 +65,8 @@ There are no command-line flags, all configuration is done in `config.json`.
 - `check_count`: How many times to check each host and return an average for.
 - `rtb`: Can be omitted if you are not performing an RTB check. See `genbid()` function for what these values map to.
 - `check_types` specifies the types of checks that will be performed against all hosts. Currently, the options are as follows:
-    - `rtb`: Sends a test bid compliant with OpenRTB 2.3
+    - `rtb`: Sends a test bid compliant with OpenRTB 2.3.
+    - `get`: Performs an HTTP get request.
     - `icmp`: Performs an ICMP ping. [Running as root is required for the Python sockets library to do ICMP things](https://stackoverflow.com/questions/1189389/python-non-privileged-icmp).
 
 

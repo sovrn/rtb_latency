@@ -1,33 +1,54 @@
 #!/usr/bin/python
 
+import itertools
 import json
-import os
+import logging
+import ping
+import pymysql
 import re
+import requests
 import socket
 import sys
 import time
 import urllib2
-import inspect
-import ping
 import uuid
-import requests
-import itertools
+
+logging.basicConfig(format='%(filename)s | %(levelname)s | %(funcName)s | %(message)s')
+logger = logging.getLogger(__name__)
 
 
-def logbro(message, level='debug'):
+def genconfig():
     """
-    Simple console logger that prints the function that called it along with your message.
+    Reads config from file and further populates config with dynamic data.
 
-    :param message:
-    :param level:
-    :return:
+    :return: config as dict
     """
+    # Open config file
     try:
-        this_script = os.path.basename(__file__)
-        calling_function = inspect.stack()[1][3]
-        print(' | '.join([this_script, level, calling_function, message]))
-    except:
-        print(message)
+        with open('config.json', 'r') as config_file:
+            config = json.loads(config_file.read())
+    except Exception as ex:
+        logger.exception('Trouble opening config file.')
+        sys.exit(1)
+    # Get public IP
+    try:
+        pubiprequest = urllib2.urlopen(url='https://api.ipify.org')
+        config['public_ip'] = pubiprequest.read()
+        pubiprequest.close()
+    except Exception as ex:
+        logger.exception('Error getting public IP from ipify.org.')
+    # Get GeoIP info
+    try:
+        geoiprequest = urllib2.urlopen(url='http://freegeoip.net/json/' + config['public_ip'])
+        config['geoip'] = json.loads(geoiprequest.read())
+        geoiprequest.close()
+    except Exception as ex:
+        logger.exception('Error getting GeoIP from freegeoip.net.')
+    return config
+
+
+config = genconfig()
+logger.setLevel(logging.getLevelName(config['log_level']))
 
 
 def extract_hostname(string):
@@ -59,39 +80,6 @@ def graphite_safe(string):
     return string
 
 
-def genconfig():
-    """
-    Reads config from file and further populates config with dynamic data.
-
-    :return: config as dict
-    """
-    # Open config file
-    try:
-        with open('config.json', 'r') as config_file:
-            config = json.loads(config_file.read())
-    except Exception as e:
-        logbro('Trouble opening config file: ' + str(e), 'error')
-        sys.exit(1)
-    # Get public IP
-    try:
-        pubiprequest = urllib2.urlopen(url='https://api.ipify.org')
-        config['public_ip'] = pubiprequest.read()
-        pubiprequest.close()
-    except Exception as e:
-        logbro('Error getting public IP from ipify.org: ' + str(e), 'error')
-    # Get GeoIP info
-    try:
-        geoiprequest = urllib2.urlopen(url='http://freegeoip.net/json/' + config['public_ip'])
-        config['geoip'] = json.loads(geoiprequest.read())
-        geoiprequest.close()
-    except Exception as e:
-        logbro('Error getting public IP from ipify.org: ' + str(e), 'error')
-    return config
-
-
-config = genconfig()
-
-
 def build_host_dict():
     """
     Generates host list from sources defined in config file.
@@ -111,13 +99,12 @@ def build_host_dict():
         if config['load_hosts'][id]['method'] == 'file':
             try:
                 filepath = config['load_hosts'][id]['path']
-                logbro('Loading hosts from JSON file: ' + filepath)
+                logger.debug('Loading hosts from JSON file: ' + filepath)
                 checks.update(json.loads(open(filepath, 'r').read()))
-            except Exception as e:
-                logbro('Could not open JSON host file: ' + filepath + '\n' + str(e), 'error')
+            except Exception as ex:
+                logger.exception('Could not open JSON host file: ' + filepath)
         elif config['load_hosts'][id]['method'] == 'mysql':
             try:
-                import pymysql
                 mysql_db = config['load_hosts'][id]['mysql_db']
                 mysql_query = config['load_hosts'][id]['mysql_query']
                 mysql_conn = pymysql.cursors.DictCursor(pymysql.connect(
@@ -126,7 +113,7 @@ def build_host_dict():
                     passwd=config['load_hosts'][id]['mysql_pass'],
                     database=mysql_db
                 ))
-                logbro('Loading hosts from MySQL DB: ' + mysql_db)
+                logger.debug('Loading hosts from MySQL DB: ' + mysql_db)
                 result_count = mysql_conn.execute(mysql_query)
                 result_dict = mysql_conn.fetchall()
                 for id, row in enumerate(result_dict):
@@ -136,10 +123,10 @@ def build_host_dict():
                     for region in result_dict[id]:
                         if 'http' in result_dict[id][region]:
                             checks[provider][region] = result_dict[id][region]
-            except Exception as e:
-                logbro('Could not load hosts from MySQL: ' + str(e), 'error')
+            except Exception as ex:
+                logger.exception('Could not load hosts from MySQL: ')
         else:
-            logbro('Unknown source type for hosts: ' + source, 'error')
+            logger.error('Unknown source type for hosts: ' + source)
         # Some of the providers gathered from MySQL may be empty, so we should remove them.
         emptykeys = []
         for key in checks:
@@ -204,14 +191,37 @@ def genbid():
     })
 
 
+def http_get_latency(host):
+    """
+    Performs http get request and returns latency.
+
+    :param host: Hostname as string.
+    :return: Timestamp as float of seconds or nothing
+    """
+    logger.debug('Sending HTTP GET to: ' + extract_hostname(host))
+    try:
+        s = requests.Session()
+        s.mount('http://', requests.adapters.HTTPAdapter(max_retries=1))
+        s.mount('https://', requests.adapters.HTTPAdapter(max_retries=1))
+        start = time.time()
+        req = s.get(host, timeout=config['timeout'])
+        end = time.time()
+        if req.status_code == 204 or req.status_code == requests.codes.ok:
+            return end - start
+        else:
+            logger.warning(str(req.status_code) + str(req.text))
+    except Exception as ex:
+        logger.exception('Request failed to: ' + host)
+
+
 def rtb_latency(host):
     """
-    Sends test RTB bid to host.
+    Sends test RTB bid to host and returns latency.
 
     :param host: Hostname as string
     :return: Timestamp as float of seconds or nothing
     """
-    # logbro('Sending test bid to: ' + host)
+    logger.debug('Sending test bid to: ' + extract_hostname(host))
     try:
         s = requests.Session()
         s.mount('http://', requests.adapters.HTTPAdapter(max_retries=1))
@@ -227,9 +237,9 @@ def rtb_latency(host):
         if req.status_code == 204 or req.status_code == requests.codes.ok:
             return end - start
         else:
-            logbro('Provider returned error: ' + str(req.status_code) + str(req.text), 'warning')
-    except Exception as e:
-        logbro(str(e), 'error')
+            logger.warning(str(req.status_code) + str(req.text))
+    except Exception as ex:
+        logger.exception('Request failed to: ' + host)
 
 
 def icmp_latency(host):
@@ -239,11 +249,11 @@ def icmp_latency(host):
     :param host: Hostname as string
     :return: Timestamp as float of seconds or nothing
     """
-    # logbro('Pinging host: ' + host)
+    logger.debug('Pinging host: ' + host)
     try:
         return ping.do_one(host, config['timeout'])
-    except Exception as e:
-        logbro('host=' + extract_hostname(host) + ' | ' + str(e), 'error')
+    except Exception as ex:
+        logger.exception('Ping failed to: ' + host)
 
 
 def average_latency(host, protocol):
@@ -270,8 +280,14 @@ def average_latency(host, protocol):
                 latencies.append(result)
             else:
                 break
+        elif protocol == "get":
+            result = http_get_latency(host)
+            if result:
+                latencies.append(result)
+            else:
+                break
         else:
-            logbro('Unknown protocol: ' + protocol, 'error')
+            logger.error('Unknown protocol: ' + protocol)
             return
     try:
         avg_latency = sum(latencies) / float(len(latencies))
@@ -292,6 +308,9 @@ def send_graphite(
     """
     Send a latency metric to Graphite.
 
+    Line format:
+      prefix.provider.remote_region.local_host.protocol latency_in_milliseconds timestamp
+
     :param provider: provider name as string
     :param protocol: protocol as string
     :param latency: latency in seconds as float
@@ -302,8 +321,6 @@ def send_graphite(
     :return: Nope
     """
     try:
-        # Line format:
-        #     prefix.provider.remote_region.local_host.protocol latency_in_milliseconds timestamp
         if latency == float('-1'):
             # Keep '-1' error values
             clean_latency = str(latency)
@@ -322,13 +339,13 @@ def send_graphite(
             clean_latency,
             str(int(time.time()))
         ])
-        # logbro('line: ' + graphite_line)
+        logger.debug('Graphite line: ' + graphite_line)
         # Send line
         graphite_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         graphite_connection.connect((graphite_host, graphite_port))
         graphite_connection.sendall(graphite_line)
-    except Exception as e:
-        return  # logbro(str(e), 'error')
+    except Exception as ex:
+        return # logger.exception('Graphite exception')
 
 
 def main_loop(host_dict):
@@ -339,17 +356,18 @@ def main_loop(host_dict):
     :return: Nope
     """
     for provider in host_dict:
-        logbro('Checking provider: ' + provider)
+        logger.info('Checking provider: ' + provider)
         for region in host_dict[provider]:
             for protocol in config['check_types']:
+                latency = average_latency(
+                    host=host_dict[provider][region],
+                    protocol=protocol
+                )
                 send_graphite(
                     provider=provider,
                     protocol=protocol,
                     remote_region=region,
-                    latency=average_latency(
-                        host=host_dict[provider][region],
-                        protocol=protocol
-                    )
+                    latency=latency
                 )
 
 
