@@ -3,6 +3,7 @@
 import itertools
 import json
 import logging
+import os
 import ping
 import pymysql
 import re
@@ -14,7 +15,7 @@ import urllib2
 import uuid
 
 logging.basicConfig(format='%(filename)s | %(levelname)s | %(funcName)s | %(message)s')
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__file__)
 
 
 def genconfig():
@@ -25,7 +26,8 @@ def genconfig():
     """
     # Open config file
     try:
-        with open('config.json', 'r') as config_file:
+        script_dir = os.path.dirname(os.path.realpath(__file__))
+        with open(script_dir + '/config.json', 'r') as config_file:
             config = json.loads(config_file.read())
     except Exception as ex:
         logger.exception('Trouble opening config file.')
