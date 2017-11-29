@@ -5,7 +5,6 @@ import json
 import logging
 import os
 import ping
-import pymysql
 import re
 import requests
 import socket
@@ -107,6 +106,7 @@ def build_host_dict():
                 logger.exception('Could not open JSON host file: ' + filepath)
         elif config['load_hosts'][id]['method'] == 'mysql':
             try:
+                import pymysql
                 mysql_db = config['load_hosts'][id]['mysql_db']
                 mysql_query = config['load_hosts'][id]['mysql_query']
                 mysql_conn = pymysql.cursors.DictCursor(pymysql.connect(

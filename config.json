@@ -4,6 +4,7 @@
     "graphite_prefix": "site_latency",
     "check_count": 3,
     "timeout": 1,
+    "log_level": "INFO",
     "load_hosts": [
         {
             "method": "file",
