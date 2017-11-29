@@ -63,11 +63,14 @@ There are no command-line flags, all configuration is done in `config.json`.
 - `graphite_prefix`: A string to prepend to every Graphite metric line.
 - `timeout`: Connection timeout in seconds.
 - `check_count`: How many times to check each host and return an average for.
+- `load_hosts`: Defines sources for endpoints to check.
+  - `"method": "file"` allows you to load endpoints from a JSON file like `hosts_example.json`.
+  - `"method": "mysql"` allows you to load endpoints from a MySQL DB. Your query must return one column as `provider_name` and an arbitrary number of columns containing a single endpoint URL per row. The endpoint column name should designate the region.
 - `rtb`: Can be omitted if you are not performing an RTB check. See `genbid()` function for what these values map to.
 - `check_types` specifies the types of checks that will be performed against all hosts. Currently, the options are as follows:
     - `rtb`: Sends a test bid compliant with OpenRTB 2.3.
-    - `get`: Performs an HTTP get request.
-    - `icmp`: Performs an ICMP ping. [Running as root is required for the Python sockets library to do ICMP things](https://stackoverflow.com/questions/1189389/python-non-privileged-icmp).
+    - `get`: Performs an HTTP GET request.
+    - `icmp`: Performs an ICMP ping. [Root is required for ICMP](https://stackoverflow.com/questions/1189389/python-non-privileged-icmp).
 
 
 ### `hosts_example.json`
