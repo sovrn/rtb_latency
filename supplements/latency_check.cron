@@ -1,1 +1,1 @@
-*/5 * * * * /usr/bin/python2 /opt/latency_check/latency_check.py | /usr/bin/logger
+*/5 * * * * /bin/bash -c "/usr/bin/python2 /opt/latency_check/latency_check.py |& /usr/bin/logger"
