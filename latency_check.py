@@ -345,7 +345,7 @@ def send_graphite(
         graphite_connection.connect((graphite_host, graphite_port))
         graphite_connection.sendall(graphite_line)
     except Exception as ex:
-        return # logger.exception('Graphite exception')
+        logger.exception('Graphite exception')
 
 
 def main_loop(host_dict):
