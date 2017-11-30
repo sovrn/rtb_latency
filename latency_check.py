@@ -112,15 +112,15 @@ def build_host_dict():
             try:
                 logger.debug('Loading hosts from MySQL DB...')
                 import pymysql
-                mysql_db = config['load_hosts'][id]['mysql_db']
-                mysql_query = config['load_hosts'][id]['mysql_query']
                 mysql_conn = pymysql.cursors.DictCursor(pymysql.connect(
                     host=config['load_hosts'][id]['mysql_host'],
                     user=config['load_hosts'][id]['mysql_user'],
                     passwd=config['load_hosts'][id]['mysql_pass'],
-                    database=mysql_db
+                    database=config['load_hosts'][id]['mysql_db']
                 ))
-                result_count = mysql_conn.execute(mysql_query)
+                result_count = mysql_conn.execute(
+                    config['load_hosts'][id]['mysql_query']
+                )
                 result_dict = mysql_conn.fetchall()
                 for id, row in enumerate(result_dict):
                     provider = result_dict[id]['provider_name']
