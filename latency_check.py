@@ -212,7 +212,7 @@ def http_get_latency(host):
         if req.status_code == 204 or req.status_code == requests.codes.ok:
             return end - start
         else:
-            logger.error('Request failed to: ' + host + str(req.status_code) + str(req.text))
+            logger.error('Request failed to: ' + host + ' code=' + str(req.status_code) + ' text=' + str(req.text))
     except Exception as ex:
         logger.exception('Request failed to: ' + host)
 
@@ -240,7 +240,7 @@ def rtb_latency(host):
         if req.status_code == 204 or req.status_code == requests.codes.ok:
             return end - start
         else:
-            logger.error('Request failed to: ' + host + str(req.status_code) + str(req.text))
+            logger.error('Request failed to: ' + host + ' code=' + str(req.status_code) + ' text=' + str(req.text))
     except Exception as ex:
         logger.exception('Request failed to: ' + host)
 
