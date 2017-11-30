@@ -24,6 +24,7 @@ def genconfig():
     :return: config as dict
     """
     # Open config file
+    logger.debug('Loading config file...')
     try:
         script_dir = os.path.dirname(os.path.realpath(__file__))
         with open(script_dir + '/config.json', 'r') as config_file:
@@ -32,6 +33,7 @@ def genconfig():
         logger.exception('Trouble opening config file.')
         sys.exit(1)
     # Get public IP
+    logger.debug('Requesting public IP from ipify.org...')
     try:
         pubiprequest = urllib2.urlopen(url='https://api.ipify.org')
         config['public_ip'] = pubiprequest.read()
@@ -39,6 +41,7 @@ def genconfig():
     except Exception as ex:
         logger.exception('Error getting public IP from ipify.org.')
     # Get GeoIP info
+    logger.debug('Requesting GeoIP from freegeoip.net...')
     try:
         geoiprequest = urllib2.urlopen(url='http://freegeoip.net/json/' + config['public_ip'])
         config['geoip'] = json.loads(geoiprequest.read())
@@ -107,6 +110,7 @@ def build_host_dict():
                 logger.exception('Could not open JSON host file: ' + filepath)
         elif config['load_hosts'][id]['method'] == 'mysql':
             try:
+                logger.debug('Loading hosts from MySQL DB: ' + mysql_db)
                 import pymysql
                 mysql_db = config['load_hosts'][id]['mysql_db']
                 mysql_query = config['load_hosts'][id]['mysql_query']
@@ -116,7 +120,6 @@ def build_host_dict():
                     passwd=config['load_hosts'][id]['mysql_pass'],
                     database=mysql_db
                 ))
-                logger.debug('Loading hosts from MySQL DB: ' + mysql_db)
                 result_count = mysql_conn.execute(mysql_query)
                 result_dict = mysql_conn.fetchall()
                 for id, row in enumerate(result_dict):
@@ -127,10 +130,11 @@ def build_host_dict():
                         if 'http' in result_dict[id][region]:
                             checks[provider][region] = result_dict[id][region]
             except Exception as ex:
-                logger.exception('Could not load hosts from MySQL: ')
+                logger.exception('Could not load hosts from MySQL.')
         else:
             logger.error('Unknown source type for hosts: ' + source)
         # Some of the providers gathered from MySQL may be empty, so we should remove them.
+        logger.debug('Removing empty keys from host dict...')
         emptykeys = []
         for key in checks:
             if checks[key] == {}:
@@ -358,6 +362,7 @@ def main_loop(host_dict):
     :param host_dict:
     :return: Nope
     """
+    logger.info('Starting latency check for all hosts.')
     for provider in host_dict:
         logger.info('Checking provider: ' + provider)
         for region in host_dict[provider]:
@@ -372,6 +377,7 @@ def main_loop(host_dict):
                     remote_region=region,
                     latency=latency
                 )
+    logger.info('Finished latency check.')
 
 
 main_loop(build_host_dict())
