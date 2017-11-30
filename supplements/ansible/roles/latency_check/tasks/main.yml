@@ -1,5 +1,13 @@
 ---
 
+- name: Install latency_check dependencies
+  pip:
+    name:
+      - pymysql
+      - requests
+  tags:
+    - latency_check
+
 - name: Clone latency_check repo
   git:
     repo: https://github.com/sovrn/latency_check.git
