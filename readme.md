@@ -21,7 +21,7 @@ There are no command-line flags, all configuration is done in `config.json`.
     - `graphite_prefix`: A string to prepend to every Graphite metric line. Think of it as your Graphite "base path".
     - `check_count`: How many times to check each host and return an average for.
     - `timeout`: Connection timeout in seconds.
-    - `log_level`: Sets the logging level. DEBUG, INFO, WARNING, and ERROR are used, but any Python standard logging level will be accepted.
+    - `log_level`: Sets the logging level. DEBUG, INFO, and ERROR are used, but any Python standard logging level will be accepted.
     - `load_hosts`: Defines sources for endpoints to check.
         - `"method": "file"` allows you to load endpoints from a JSON file like `hosts_example.json`.
         - `"method": "mysql"` allows you to load endpoints from a MySQL DB. Your query must return one column as `provider_name` and an arbitrary number of columns containing a single endpoint URL per row. The endpoint column name should designate the region.
