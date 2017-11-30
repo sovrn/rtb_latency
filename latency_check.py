@@ -110,7 +110,7 @@ def build_host_dict():
                 logger.exception('Could not open JSON host file: ' + filepath)
         elif config['load_hosts'][id]['method'] == 'mysql':
             try:
-                logger.debug('Loading hosts from MySQL DB: ' + mysql_db)
+                logger.debug('Loading hosts from MySQL DB.')
                 import pymysql
                 mysql_db = config['load_hosts'][id]['mysql_db']
                 mysql_query = config['load_hosts'][id]['mysql_query']
