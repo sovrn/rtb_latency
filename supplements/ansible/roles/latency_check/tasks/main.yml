@@ -1,35 +1,10 @@
 ---
 
-- name: Clone latency_check repo locally
-  delegate_to: 127.0.0.1
-  run_once: yes
+- name: Clone latency_check repo
   git:
     repo: https://github.com/sovrn/latency_check.git
-    dest: /tmp/latency_check
+    dest: /opt/latency_check
     accept_hostkey: yes
-  tags:
-    - latency_check
-
-- name: Compress latency_check repo
-  delegate_to: 127.0.0.1
-  run_once: yes
-  archive:
-    path: /tmp/latency_check
-    dest: /tmp/latency_check.tgz
-  tags:
-    - latency_check
-
-- name: Create latency_check destination directory
-  file:
-    path: "{{lc_install_dir}}"
-    state: directory
-  tags:
-    - latency_check
-
-- name: Extract latency_check archive
-  unarchive:
-    src: /tmp/latency_check.tgz
-    dest: "{{lc_install_dir}}/../"
   tags:
     - latency_check
 
