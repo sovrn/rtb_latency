@@ -68,6 +68,7 @@ def extract_hostname(string):
 def graphite_safe(string):
     """
     Sanitizes a string so that it can be used as part of a Graphite line.
+    It does this by replacing non-alphanumeric characters with underscores.
 
     :param string: Your string to sanitize
     :return: Your sanitized string

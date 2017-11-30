@@ -30,6 +30,8 @@ There are no command-line flags, all configuration is done in `config.json`.
         - `get`: Performs an HTTP GET request.
         - `icmp`: Performs an ICMP ping. [Root is required for ICMP](https://stackoverflow.com/questions/1189389/python-non-privileged-icmp).
     - `rtb`: Can be omitted if you are not performing an OpenRTB check. See the `RTB Example Bid` section for what these values map to.
+    - `public_ip`: A fallback if your public IP cannot be detected.
+    - `geoip`: A fallback if your GeoIP cannot be detected.
 
 ### Example `config.json`
 
@@ -70,6 +72,15 @@ There are no command-line flags, all configuration is done in `config.json`.
             "Content-Type": "application/json",
             "x-openrtb-version": "2.3"
         }
+    },
+    "public_ip": "8.8.8.8",
+    "geoip": {
+        "latitude": 37.4060,
+        "longitude": -122.0785,
+        "country_code": "USA",
+        "region_code": "CA",
+        "city": "Mountain View",
+        "zip_code": "94043"
     }
 }
 ```
