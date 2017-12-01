@@ -13,6 +13,8 @@ As root, run: `python latency_check.py`
 
 There are no command-line flags, all configuration is done in `config.json`.
 
+If you use Grafana for your Graphite dashboards, there is a dashboard template under supplements that you can use.
+
 ## Configuration
 
 - Edit `config.json` to adjust the default values to your liking.
