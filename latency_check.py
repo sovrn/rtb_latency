@@ -183,7 +183,7 @@ def genbid():
                 "country": config['geoip']['country_code'],
                 "region": config['geoip']['region_code'],
                 "city": config['geoip']['city'],
-                "zip": config['geoip']['zip_code'],
+                "zip": str(config['geoip']['zip_code']),
                 "type": 2
             },
             "language": "en",
