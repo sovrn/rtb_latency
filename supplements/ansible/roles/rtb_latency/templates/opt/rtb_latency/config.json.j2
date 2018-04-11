@@ -3,8 +3,10 @@
     "graphite_port": {{lc_graphite_port}},
     "graphite_prefix": "{{lc_graphite_prefix}}",
     "check_count": 3,
-    "log_level": "INFO",
     "timeout": 1,
+    "threads": 8,
+    "latency_warn": 0.1,
+    "log_level": "INFO",
     "load_hosts": [
         {
             "method": "file",
@@ -16,7 +18,7 @@
             "mysql_host": "your_db_host",
             "mysql_user": "your_db_user",
             "mysql_pass": "your_db_password",
-            "mysql_query": "select provider_name, region_url from provider_table;"
+            "mysql_query": "select provider_name as provider, region_url as amer_west from provider_table;"
         }
     ],
     "check_types": [
@@ -24,6 +26,28 @@
         "get",
         "icmp"
     ],
+    "regions": {
+        "major": [
+            "apac",
+            "emea",
+            "amer"
+        ],
+        "minor": [
+            "north",
+            "south",
+            "east",
+            "west",
+            "central"
+        ]
+    },
+    "region_filter": {
+        "major": [
+            "star"
+        ],
+        "minor": [
+            "star"
+        ]
+    },
     "rtb": {
         "bid_ext_pchain": "pchain",
         "bid_site_domain": "example.com",

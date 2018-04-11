@@ -1,7 +1,7 @@
 ---
 
 # You can pass '-e "servers=comma-separated-hostnames.example.com"' to the ansible-playbook command or replace hosts with your own list.
-# There are also a few variables under `roles/latency_check/vars/main.yml`
+# There are also a few variables under `roles/rtb_latency/vars/main.yml`
 - hosts: "{{ servers }}"
   roles:
-    - latency_check
+    - rtb_latency

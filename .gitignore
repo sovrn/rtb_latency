@@ -10,6 +10,7 @@ __pycache__/
 
 # Distribution / packaging
 .Python
+*.pyz
 env/
 build/
 develop-eggs/
@@ -101,3 +102,9 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+# visual studio code
+.vscode
+
+hosts_private.json
+config.json

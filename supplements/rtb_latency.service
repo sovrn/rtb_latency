@@ -1,0 +1,19 @@
+# Instructions for use on a SystemD-based linux distribution:
+# 1. Modify this (if needed) and copy it to /etc/systemd/system/
+# 2. Execute `systemctl daemon-reload`
+# 3. Execute `systemctl enable rtb_latency.service`
+# 4. Execute `systemctl start  rtb_latency.service`
+# 5. Execute `systemctl status rtb_latency.service`
+# 6. Do the same for rtb_latency.timer if you want it to run periodically.
+
+[Unit]
+Description=RTB Latency Checker
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python2 /opt/rtb_latency/rtb_latency.py
+
+[Install]
+WantedBy=network-online.target

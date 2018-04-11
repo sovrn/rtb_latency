@@ -1,0 +1,1 @@
+*/5 * * * * /bin/bash -c "/usr/bin/time /usr/bin/python2 /opt/rtb_latency/rtb_latency.py |& /usr/bin/logger"

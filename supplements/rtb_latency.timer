@@ -1,0 +1,16 @@
+# Instructions for use on a SystemD-based linux distribution:
+# 1. Modify this (if needed) and copy it to /etc/systemd/system/
+# 2. Execute `systemctl daemon-reload`
+# 3. Execute `systemctl enable rtb_latency.timer`
+# 4. Execute `systemctl start  rtb_latency.timer`
+# 5. Execute `systemctl status rtb_latency.timer`
+# 6. Ensure that the same was done for rtb_latency.service and that it has no errors.
+
+[Unit]
+Description=RTB Latency Check
+
+[Timer]
+OnCalendar=*:0/5
+
+[Install]
+WantedBy=timers.target

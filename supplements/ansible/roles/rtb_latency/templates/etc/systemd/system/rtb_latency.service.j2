@@ -1,0 +1,11 @@
+[Unit]
+Description=RTB Latency Checker
+Requires=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python2 {{lc_install_dir}}/rtb_latency.py
+
+[Install]
+WantedBy=network-online.target

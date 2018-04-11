@@ -1,19 +1,26 @@
 #!/usr/bin/python
 
+import ipwhois
 import itertools
 import json
 import logging
 import os
 import ping
+import pymysql
 import re
 import requests
 import socket
+import subprocess
 import sys
+import threading
 import time
 import urllib2
 import uuid
+import Queue
+from multiprocessing import Pool
+from multiprocessing.dummy import Pool as ThreadPool
 
-logging.basicConfig(format='%(filename)s | %(levelname)s | %(funcName)s | %(message)s')
+logging.basicConfig(format='rtb_latency %(funcName)s %(levelname)s %(message)s')
 logger = logging.getLogger(__file__)
 
 
@@ -26,10 +33,9 @@ def genconfig():
     # Open config file
     logger.debug('Loading config file...')
     try:
-        script_dir = os.path.dirname(os.path.realpath(__file__))
-        with open(script_dir + '/config.json', 'r') as config_file:
+        with open('config.json', 'r') as config_file:
             config = json.loads(config_file.read())
-    except Exception as ex:
+    except Exception:
         logger.exception('Trouble opening config file.')
         sys.exit(1)
     # Get public IP
@@ -38,7 +44,7 @@ def genconfig():
         pubiprequest = urllib2.urlopen(url='https://api.ipify.org')
         config['public_ip'] = pubiprequest.read()
         pubiprequest.close()
-    except Exception as ex:
+    except Exception:
         logger.exception('Error getting public IP from ipify.org.')
     # Get GeoIP info
     logger.debug('Requesting GeoIP from freegeoip.net...')
@@ -46,7 +52,7 @@ def genconfig():
         geoiprequest = urllib2.urlopen(url='http://freegeoip.net/json/' + config['public_ip'])
         config['geoip'] = json.loads(geoiprequest.read())
         geoiprequest.close()
-    except Exception as ex:
+    except Exception:
         logger.exception('Error getting GeoIP from freegeoip.net.')
     return config
 
@@ -66,6 +72,16 @@ def extract_hostname(string):
         return re.findall(r'(?<=//)[\w.\-]+', string)[0]
     else:
         return string
+
+
+def extract_path(string):
+    """
+    Extract FQDN or IP from a full URL
+
+    :param string: A URL as a string
+    :return: FQDN or IP as a string
+    """
+    return re.sub(r'[^/]*//[^:/]*', '', string)
 
 
 def graphite_safe(string):
@@ -90,11 +106,13 @@ def build_host_dict():
     Generates host list from sources defined in config file.
     Example output:
         {
-            'provider_name': {
-                'region_name': 'url',
-                ...
+            "provider_name": {
+                "path": "URI suffix",
+                "region_major": {
+                    "region_minor": ["IP_address", ...],
+                    "star": ["IP_address", ...]
+                },
             },
-            ...
         }
 
     :return: Providers as dict
@@ -106,12 +124,11 @@ def build_host_dict():
                 filepath = config['load_hosts'][id]['path']
                 logger.debug('Loading hosts from JSON file: ' + filepath)
                 checks.update(json.loads(open(filepath, 'r').read()))
-            except Exception as ex:
+            except Exception:
                 logger.exception('Could not open JSON host file: ' + filepath)
         elif config['load_hosts'][id]['method'] == 'mysql':
             try:
                 logger.debug('Loading hosts from MySQL DB...')
-                import pymysql
                 mysql_conn = pymysql.cursors.DictCursor(pymysql.connect(
                     host=config['load_hosts'][id]['mysql_host'],
                     user=config['load_hosts'][id]['mysql_user'],
@@ -121,26 +138,36 @@ def build_host_dict():
                 result_count = mysql_conn.execute(
                     config['load_hosts'][id]['mysql_query']
                 )
+                result_count
                 result_dict = mysql_conn.fetchall()
                 for id, row in enumerate(result_dict):
-                    provider = result_dict[id]['provider_name']
+                    row
+                    provider = result_dict[id]['provider']
                     if provider not in checks:
                         checks[provider] = {}
+                        for region_major in config['regions']['major']:
+                            checks[provider][region_major] = {'star': []}
+                            for region_minor in config['regions']['minor']:
+                                checks[provider][region_major][region_minor] = []
                     for region in result_dict[id]:
                         if 'http' in result_dict[id][region]:
-                            checks[provider][region] = result_dict[id][region]
-            except Exception as ex:
+                            try:
+                                region_major, region_minor = region.split('_')
+                                provider_host = extract_hostname(result_dict[id][region])
+                                checks[provider]['path'] = extract_path(result_dict[id][region])
+                                _, _, provider_endpoints = socket.gethostbyname_ex(provider_host)
+                                provider_endpoints.append(provider_host)
+                                for endpoint in provider_endpoints:
+                                    if endpoint not in checks[provider][region_major][region_minor]:
+                                        checks[provider][region_major][region_minor].append(endpoint)
+                                    if endpoint not in checks[provider][region_major]['star']:
+                                        checks[provider][region_major]['star'].append(endpoint)
+                            except Exception:
+                                logger.exception('Trouble processing provider ' + provider + ' URL: ' + result_dict[id][region])
+            except Exception:
                 logger.exception('Could not load hosts from MySQL.')
         else:
             logger.error('Unknown source type for hosts: ' + source)
-        # Some of the providers gathered from MySQL may be empty, so we should remove them.
-        logger.debug('Removing empty keys from host dict...')
-        emptykeys = []
-        for key in checks:
-            if checks[key] == {}:
-                emptykeys.append(key)
-        for key in emptykeys:
-            del checks[key]
     return checks
 
 
@@ -198,9 +225,45 @@ def genbid():
     })
 
 
+def net_debug(ip, host):
+    """
+    Gather path information about a remote IP for debugging
+
+    :param ip: IP address to check path to.
+    :return: JSON dictionary
+    """
+    try:
+        as_remote = ipwhois.asn.IPASN(ipwhois.net.Net(ip)).lookup()
+        as_local = ipwhois.asn.IPASN(ipwhois.net.Net(config['public_ip'])).lookup()
+        try:
+            traceroute = subprocess.check_output([
+                'traceroute', '-A', '-I', '-e', '-N 1', '-q 1', ip
+            ]).split('\n')
+            del traceroute[0]
+            del traceroute[-1]
+        except Exception:
+            logger.exception('Traceroute failed for ' + ip)
+            traceroute = []
+        results = json.dumps({
+            'local_asn': as_local['asn'],
+            'local_asn_cidr': as_local['asn_cidr'],
+            'local_ip': config['public_ip'],
+            'remote_asn': as_remote['asn'],
+            'remote_asn_cidr': as_remote['asn_cidr'],
+            'remote_asn_descr': as_remote['asn_description'],
+            'remote_hostname': host,
+            'remote_ip': ip,
+            'traceroute': traceroute
+        })
+        return results
+    except Exception:
+        logger.exception('Could not retrieve net debugging info for ' + ip)
+        return {}
+
+
 def http_get_latency(host):
     """
-    Performs http get request and returns latency.
+    Performs an HTTP GET request and returns latency.
 
     :param host: Hostname as string.
     :return: Timestamp as float of seconds or nothing
@@ -213,17 +276,17 @@ def http_get_latency(host):
         start = time.time()
         req = s.get(host, timeout=config['timeout'])
         end = time.time()
-        if req.status_code == 204 or req.status_code == requests.codes.ok:
+        if req.status_code <= 204 or req.status_code >= 200:
             return end - start
         else:
             logger.error('Request failed to: ' + host + ' code=' + str(req.status_code) + ' text=' + str(req.text))
-    except Exception as ex:
+    except Exception:
         logger.exception('Request failed to: ' + host)
 
 
 def rtb_latency(host):
     """
-    Sends test RTB bid to host and returns latency.
+    Sends a test RTB bid to host and returns latency.
 
     :param host: Hostname as string
     :return: Timestamp as float of seconds or nothing
@@ -241,11 +304,11 @@ def rtb_latency(host):
             headers=config['rtb']['headers']
         )
         end = time.time()
-        if req.status_code == 204 or req.status_code == requests.codes.ok:
+        if req.status_code <= 204 or req.status_code >= 200:
             return end - start
         else:
             logger.error('Request failed to: ' + host + ' code=' + str(req.status_code) + ' text=' + str(req.text))
-    except Exception as ex:
+    except Exception:
         logger.exception('Request failed to: ' + host)
 
 
@@ -259,11 +322,11 @@ def icmp_latency(host):
     logger.debug('Pinging host: ' + host)
     try:
         return ping.do_one(host, config['timeout'])
-    except Exception as ex:
+    except Exception:
         logger.exception('Ping failed to: ' + host)
 
 
-def average_latency(host, protocol):
+def average_latency(host, protocol, path):
     """
     Return average latency of checks to host for given protocol.
     Errors will break the loop and an average will be calculated of whatever data we have.
@@ -273,33 +336,36 @@ def average_latency(host, protocol):
     :param protocol: protocol string
     :return: average latency in seconds as float
     """
+    ip = socket.gethostbyname(extract_hostname(host))
     latencies = []
     for count in range(0, config['check_count']):
         if protocol == "icmp":
-            result = icmp_latency(extract_hostname(host))
+            result = icmp_latency(ip)
             if result:
                 latencies.append(result)
             else:
                 break
         elif protocol == "rtb":
-            result = rtb_latency(host)
+            result = rtb_latency('http://' + ip + path)
             if result:
                 latencies.append(result)
             else:
                 break
         elif protocol == "get":
-            result = http_get_latency(host)
+            result = http_get_latency('http://' + ip + path)
             if result:
                 latencies.append(result)
             else:
                 break
         else:
-            logger.error('Unknown protocol: ' + protocol)
+            logger.error(str(count) + ' Unknown protocol: ' + protocol)
             return
     try:
         avg_latency = sum(latencies) / float(len(latencies))
     except:
-        avg_latency = float('-1')
+        avg_latency = -1
+    if avg_latency > config['latency_warn'] or avg_latency == -1:
+        logger.warn('latency=' + str(avg_latency) + 's ' + net_debug(ip, host))
     return avg_latency
 
 
@@ -307,6 +373,7 @@ def send_graphite(
             provider,
             protocol,
             latency,
+            endpoint,
             remote_region,
             graphite_host=config["graphite_host"],
             graphite_port=config["graphite_port"],
@@ -340,6 +407,7 @@ def send_graphite(
                 graphite_safe(graphite_prefix),
                 graphite_safe(provider),
                 graphite_safe(remote_region),
+                graphite_safe(endpoint),
                 graphite_safe(socket.getfqdn()),
                 graphite_safe(protocol)
             ]),
@@ -351,32 +419,57 @@ def send_graphite(
         graphite_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         graphite_connection.connect((graphite_host, graphite_port))
         graphite_connection.sendall(graphite_line)
-    except Exception as ex:
+    except Exception:
         logger.exception('Graphite exception')
+
+
+def check_and_send(opt_dict):
+    """
+    Get average latency and ship it to Graphite. This is needed for multithreading.
+
+    :param opt_dict: dictionary containing the keys and values that are requested below:
+    :returns: nothing
+    """
+    latency = average_latency(
+        host=opt_dict['endpoint'],
+        path=opt_dict['path'],
+        protocol=opt_dict['protocol']
+    )
+    send_graphite(
+        endpoint=opt_dict['endpoint'],
+        latency=latency,
+        protocol=opt_dict['protocol'],
+        provider=opt_dict['provider'],
+        remote_region=opt_dict['region']
+    )
 
 
 def main_loop(host_dict):
     """
-    This function loops through a dictionary of hosts and runs the other functions against them.
+    This function loops through the dictionary of hosts, populates a list of actions,
+    and kicks off that list in multiple threads.
 
     :param host_dict:
     :return: Nope
     """
+    checklist = []
     logger.info('Starting latency check for all hosts.')
     for provider in host_dict:
-        logger.info('Checking provider: ' + provider)
-        for region in host_dict[provider]:
-            for protocol in config['check_types']:
-                latency = average_latency(
-                    host=host_dict[provider][region],
-                    protocol=protocol
-                )
-                send_graphite(
-                    provider=provider,
-                    protocol=protocol,
-                    remote_region=region,
-                    latency=latency
-                )
+        for region_major in config['region_filter']['major']:
+            for region_minor in config['region_filter']['minor']:
+                for endpoint in host_dict[provider][region_major][region_minor]:
+                    for protocol in config['check_types']:
+                        checklist.append({
+                            'endpoint': endpoint,
+                            'path': host_dict[provider]['path'],
+                            'protocol': protocol,
+                            'provider': provider,
+                            'region': region_major + '_' + region_minor
+                        })
+    pool = ThreadPool(config['threads'])
+    pool.map(check_and_send, checklist)
+    pool.close()
+    pool.join()
     logger.info('Finished latency check.')
 
 

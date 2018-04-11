@@ -2,6 +2,7 @@
   "annotations": {
     "list": [
       {
+        "$$hashKey": "object:104",
         "builtIn": 1,
         "datasource": "-- Grafana --",
         "enable": true,
@@ -15,105 +16,100 @@
   "editable": true,
   "gnetId": null,
   "graphTooltip": 0,
-  "hideControls": false,
-  "id": 351,
   "links": [],
-  "refresh": false,
-  "rows": [
+  "panels": [
     {
-      "collapse": false,
-      "height": "250px",
-      "panels": [
+      "aliasColors": {},
+      "bars": false,
+      "dashLength": 10,
+      "dashes": false,
+      "datasource": "grafanacloud-sovrn",
+      "fill": 1,
+      "gridPos": {
+        "h": 20,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "height": "800",
+      "id": 1,
+      "legend": {
+        "alignAsTable": true,
+        "avg": true,
+        "current": true,
+        "hideEmpty": true,
+        "hideZero": true,
+        "max": true,
+        "min": true,
+        "rightSide": true,
+        "show": true,
+        "sort": "current",
+        "sortDesc": true,
+        "total": false,
+        "values": true
+      },
+      "lines": true,
+      "linewidth": 1,
+      "links": [],
+      "minSpan": 2,
+      "nullPointMode": "null",
+      "percentage": false,
+      "pointradius": 3,
+      "points": true,
+      "renderer": "flot",
+      "repeat": null,
+      "repeatDirection": "v",
+      "seriesOverrides": [],
+      "spaceLength": 10,
+      "stack": false,
+      "steppedLine": false,
+      "targets": [
         {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": null,
-          "fill": 1,
-          "height": "800",
-          "id": 1,
-          "legend": {
-            "alignAsTable": true,
-            "avg": true,
-            "current": true,
-            "hideEmpty": true,
-            "hideZero": true,
-            "max": false,
-            "min": false,
-            "rightSide": true,
-            "show": true,
-            "sort": "current",
-            "sortDesc": true,
-            "total": false,
-            "values": true
-          },
-          "lines": true,
-          "linewidth": 1,
-          "links": [],
-          "nullPointMode": "null",
-          "percentage": false,
-          "pointradius": 5,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "span": 12,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "refId": "B",
-              "target": "site_latency.$dsp.$region.$pod.$protocol",
-              "textEditor": false
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeShift": null,
-          "title": "Response Times",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "format": "short",
-              "label": "response in ms",
-              "logBase": 1,
-              "max": null,
-              "min": "0",
-              "show": true
-            },
-            {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            }
-          ]
+          "hide": false,
+          "refId": "B",
+          "target": "rtb_latency.$provider.$region.$endpoint.$pod.$protocol",
+          "textEditor": false
         }
       ],
-      "repeat": null,
-      "repeatIteration": null,
-      "repeatRowId": null,
-      "showTitle": false,
-      "title": "Dashboard Row",
-      "titleSize": "h6"
+      "thresholds": [],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Provider Response Times",
+      "tooltip": {
+        "shared": true,
+        "sort": 0,
+        "value_type": "individual"
+      },
+      "type": "graph",
+      "xaxis": {
+        "buckets": null,
+        "mode": "time",
+        "name": null,
+        "show": true,
+        "values": []
+      },
+      "yaxes": [
+        {
+          "format": "short",
+          "label": "response in ms",
+          "logBase": 1,
+          "max": null,
+          "min": "0",
+          "show": true
+        },
+        {
+          "format": "short",
+          "label": null,
+          "logBase": 1,
+          "max": null,
+          "min": null,
+          "show": true
+        }
+      ]
     }
   ],
-  "schemaVersion": 14,
+  "refresh": false,
+  "schemaVersion": 16,
   "style": "dark",
   "tags": [],
   "templating": {
@@ -121,20 +117,19 @@
       {
         "allValue": null,
         "current": {
-          "tags": [],
           "text": "All",
           "value": [
             "$__all"
           ]
         },
-        "datasource": "grafanacloud",
+        "datasource": "grafanacloud-sovrn",
         "hide": 0,
         "includeAll": true,
         "label": null,
         "multi": true,
-        "name": "dsp",
+        "name": "provider",
         "options": [],
-        "query": "site_latency.*",
+        "query": "rtb_latency.*",
         "refresh": 1,
         "regex": "",
         "sort": 0,
@@ -152,14 +147,14 @@
             "$__all"
           ]
         },
-        "datasource": "grafanacloud",
+        "datasource": "grafanacloud-sovrn",
         "hide": 0,
         "includeAll": true,
         "label": null,
         "multi": true,
         "name": "region",
         "options": [],
-        "query": "site_latency.$dsp.*",
+        "query": "rtb_latency.$provider.*",
         "refresh": 1,
         "regex": "",
         "sort": 0,
@@ -172,20 +167,19 @@
       {
         "allValue": null,
         "current": {
-          "tags": [],
           "text": "All",
           "value": [
             "$__all"
           ]
         },
-        "datasource": "grafanacloud",
+        "datasource": "grafanacloud-sovrn",
         "hide": 0,
         "includeAll": true,
         "label": null,
         "multi": true,
-        "name": "pod",
+        "name": "endpoint",
         "options": [],
-        "query": "site_latency.$dsp.$region.*",
+        "query": "rtb_latency.$provider.$region.*",
         "refresh": 1,
         "regex": "",
         "sort": 0,
@@ -198,18 +192,40 @@
       {
         "allValue": null,
         "current": {
-          "tags": [],
           "text": "All",
           "value": "$__all"
         },
-        "datasource": "grafanacloud",
+        "datasource": "grafanacloud-sovrn",
+        "hide": 0,
+        "includeAll": true,
+        "label": null,
+        "multi": false,
+        "name": "pod",
+        "options": [],
+        "query": "rtb_latency.$provider.$region.$endpoint.*",
+        "refresh": 1,
+        "regex": "",
+        "sort": 0,
+        "tagValuesQuery": "",
+        "tags": [],
+        "tagsQuery": "",
+        "type": "query",
+        "useTags": false
+      },
+      {
+        "allValue": null,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": "grafanacloud-sovrn",
         "hide": 0,
         "includeAll": true,
         "label": null,
         "multi": false,
         "name": "protocol",
         "options": [],
-        "query": "site_latency.$dsp.$region.$pod.*",
+        "query": "rtb_latency.$provider.$region.$endpoint.$pod.*",
         "refresh": 1,
         "regex": "",
         "sort": 0,
@@ -251,6 +267,5 @@
     ]
   },
   "timezone": "",
-  "title": "Site Latency",
-  "version": 24
+  "title": "RTB Latency"
 }

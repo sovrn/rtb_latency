@@ -1,0 +1,49 @@
+---
+
+- name: Clone rtb_latency repo
+  git:
+    repo: https://github.com/sovrn/rtb_latency.git
+    dest: /opt/rtb_latency
+    accept_hostkey: yes
+  tags:
+    - rtb_latency
+
+- name: Copy rtb_latency configuration
+  template:
+    src: opt/rtb_latency/config.json.j2
+    dest: "{{lc_install_dir}}/config.json"
+  tags:
+    - rtb_latency
+
+- name: Install rtb_latency SystemD files
+  template:
+    src: "{{item.src}}.j2"
+    dest: "/{{item.dest}}"
+  with_items:
+    - etc/systemd/system/rtb_latency.service
+    - etc/systemd/system/rtb_latency.timer
+  when: ansible_service_mgr == 'systemd'
+  tags:
+    - rtb_latency
+
+- name: Activate rtb_latency SystemD script
+  systemd:
+    name: "{{item}}"
+    state: started
+    enabled: yes
+    daemon_reload: yes
+  with_items:
+    - rtb_latency.service
+    - rtb_latency.timer
+  when: ansible_service_mgr == 'systemd'
+  tags:
+    - rtb_latency
+
+- name: Install rtb_latency Cron job
+  cron:
+    job: /bin/bash -c "/usr/bin/time /usr/bin/python2 {{lc_install_dir}}/rtb_latency.py |& /usr/bin/logger"
+    name: rtb_latency
+    minute: "*/5"
+  when: ansible_service_mgr != 'systemd'
+  tags:
+    - rtb_latency
