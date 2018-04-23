@@ -96,8 +96,9 @@ def graphite_safe(string):
     string = re.sub(r'\s', '_', string)
     # Convert non-alphanumeric characters to underscores
     string = re.sub(r'[^\w]', '_', string)
-    # Collapse repeating characters into one
-    string = ''.join(ch for ch, _ in itertools.groupby(string))
+    # Collapse repeating underscores into one
+    while '__' in string:
+        string = string.replace('__', '_')
     return string
 
 

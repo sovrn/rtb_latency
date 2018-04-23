@@ -108,3 +108,4 @@ ENV/
 
 hosts_private.json
 config.json
+.DS_Store
