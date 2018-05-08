@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # Pull in submodules
+git pull --all
 git submodule init
 git submodule update --recursive
 
