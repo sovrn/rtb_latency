@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -ev
 
 # Ensure that the environment has all the submodules and symlinks in place
 source setup_environment.bash
@@ -21,7 +21,7 @@ zip -9\
     ping.py\
 
 # Prepend shebang to zip file so Python will execute it
-cat - tmp.zip <<< '#!/usr/bin/env python' > rtb_latency.pyz
+cat - tmp.zip <<< '#!/usr/bin/env python2' > rtb_latency.pyz
 # Set Permissions
 chmod -v a+rx rtb_latency.pyz
 # Remove temporary file

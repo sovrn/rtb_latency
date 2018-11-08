@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python2
 
 import ipwhois
 import itertools
@@ -234,8 +234,20 @@ def net_debug(ip, host):
     :return: JSON dictionary
     """
     try:
-        as_remote = ipwhois.asn.IPASN(ipwhois.net.Net(ip)).lookup()
-        as_local = ipwhois.asn.IPASN(ipwhois.net.Net(config['public_ip'])).lookup()
+        try:
+            as_remote = ipwhois.asn.IPASN(ipwhois.net.Net(ip)).lookup()
+            as_local = ipwhois.asn.IPASN(ipwhois.net.Net(config['public_ip'])).lookup()
+        except Exception:
+            as_local = {
+                'asn': None,
+                'asn_cidr': None,
+            }
+            as_remote = {
+                'asn': None,
+                'asn_cidr': None,
+                'asn_description': None,
+            }
+            logger.exception('Unable to determine ASN for IP: ' + ip)
         try:
             traceroute = subprocess.check_output([
                 'traceroute', '-A', '-I', '-e', '-N 1', '-q 1', ip
