@@ -5,7 +5,6 @@ import itertools
 import json
 import logging
 import os
-import ping
 import pymysql
 import re
 import requests
@@ -46,14 +45,14 @@ def genconfig():
         pubiprequest.close()
     except Exception:
         logger.exception('Error getting public IP from ipify.org.')
-    # Get GeoIP info
-    logger.debug('Requesting GeoIP from freegeoip.net...')
-    try:
-        geoiprequest = urllib2.urlopen(url='http://freegeoip.net/json/' + config['public_ip'])
-        config['geoip'] = json.loads(geoiprequest.read())
-        geoiprequest.close()
-    except Exception:
-        logger.exception('Error getting GeoIP from freegeoip.net.')
+#    # Get GeoIP info
+#    logger.debug('Requesting GeoIP from freegeoip.net...')
+#    try:
+#        geoiprequest = urllib2.urlopen(url='http://freegeoip.net/json/' + config['public_ip'])
+#        config['geoip'] = json.loads(geoiprequest.read())
+#        geoiprequest.close()
+#    except Exception:
+#        logger.exception('Error getting GeoIP from freegeoip.net.')
     return config
 
 
@@ -318,11 +317,33 @@ def rtb_latency(host):
         )
         end = time.time()
         if req.status_code <= 204 or req.status_code >= 200:
-            return end - start
+	    delta = float (end - start)
+            return delta 
         else:
             logger.error('Request failed to: ' + host + ' code=' + str(req.status_code) + ' text=' + str(req.text))
     except Exception:
         logger.exception('Request failed to: ' + host)
+
+
+def ping(server='example.com', count=1, wait_sec=1):
+    """
+    :rtype: dict or None
+    """
+    cmd = "ping -c {} -W {} {}".format(count, wait_sec, server).split(' ')
+    try:
+        output = subprocess.check_output(cmd).decode().strip()
+        lines = output.split("\n")
+        loss = float (lines[-2].split(',')[2].split()[0].split('%')[0])
+        timing = lines[-1].split()[3].split('/')
+        min = float (timing[0])
+        avg = float (timing[1])
+        max = float (timing[2])
+        mdev = float (timing[3])
+        return [min, avg, max, mdev, loss]
+
+    except Exception as e:
+        print(e)
+        return None
 
 
 def icmp_latency(host):
@@ -332,9 +353,18 @@ def icmp_latency(host):
     :param host: Hostname as string
     :return: Timestamp as float of seconds or nothing
     """
-    logger.debug('Pinging host: ' + host)
     try:
-        return ping.do_one(host, config['timeout'])
+	r = ping(server=host, count=1, wait_sec=1)
+
+        logger.debug('Pinging host: ' + host + ' [Min/Avg/Max/Loss] or None: ' + str(r))
+
+	if r is None :
+	  return float(-1)
+
+	else:
+	  result = float(r[1]) / 1000
+          return result
+
     except Exception:
         logger.exception('Ping failed to: ' + host)
 
@@ -354,16 +384,17 @@ def average_latency(host, protocol, path):
     for count in range(0, config['check_count']):
         if protocol == "icmp":
             result = icmp_latency(ip)
-            if result:
+            if result != float(-1):
                 latencies.append(result)
             else:
                 break
         elif protocol == "rtb":
-            result = rtb_latency('http://' + ip + path)
-            if result:
-                latencies.append(result)
-            else:
-                break
+            if re.match("[A-Za-z]", host) is not None:
+                result = rtb_latency('http://' + host + path)
+                if result != float(-1):
+                    latencies.append(result)
+                else:
+                    break
         elif protocol == "get":
             result = http_get_latency('http://' + ip + path)
             if result:
@@ -377,7 +408,8 @@ def average_latency(host, protocol, path):
         avg_latency = sum(latencies) / float(len(latencies))
     except:
         avg_latency = -1
-    if avg_latency > config['latency_warn'] or avg_latency == -1:
+
+    if avg_latency > config['latency_warn']:
         logger.warn('latency=' + str(avg_latency) + 's ' + net_debug(ip, host))
     return avg_latency
 
@@ -413,7 +445,7 @@ def send_graphite(
             clean_latency = str(latency)
         else:
             # Convert float of seconds to int of milliseconds
-            clean_latency = str(int(latency * 1000))
+            clean_latency = str(round(latency * 1000, 2))
         # Construct line
         graphite_line = ' '.join([
             '.'.join([
@@ -448,6 +480,9 @@ def check_and_send(opt_dict):
         path=opt_dict['path'],
         protocol=opt_dict['protocol']
     )
+    if latency == float(-1) and opt_dict['protocol'] == "rtb":
+        return
+
     send_graphite(
         endpoint=opt_dict['endpoint'],
         latency=latency,
