@@ -35,3 +35,6 @@
 [submodule "submodules/ipaddr-py"]
 	path = submodules/ipaddr-py
 	url = https://github.com/google/ipaddr-py.git
+[submodule "submodules/netaddr"]
+	path = submodules/netaddr
+	url = https://github.com/drkjam/netaddr
