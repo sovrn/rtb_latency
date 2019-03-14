@@ -13,6 +13,7 @@ zip -9\
     dns\
     idna\
     ipwhois\
+    netaddr\
     pymysql\
     requests\
     urllib3\

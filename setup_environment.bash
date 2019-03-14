@@ -13,6 +13,7 @@ ln -sfv submodules/dnspython/dns dns
 ln -sfv submodules/idna/idna idna
 ln -sfv submodules/ipaddr-py/ipaddr.py ipaddr.py
 ln -sfv submodules/ipwhois/ipwhois ipwhois
+ln -sfv submodules/netaddr/netaddr netaddr
 ln -sfv submodules/python-ping/ping.py ping.py
 ln -sfv submodules/PyMySQL/pymysql pymysql
 ln -sfv submodules/requests/requests requests
