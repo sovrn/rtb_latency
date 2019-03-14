@@ -378,7 +378,7 @@ def ping(host='google.com', number=1, wait_sec=1):
                 result['max'] = float(timing[2]) / 1000
                 result['min'] = float(timing[0]) / 1000
             if 'packets' in line:
-                result['loss'] = line.split()[6]
+                result['loss'] = line.split()[5]
         logger.debug('Ping result for host %s:\n%s', host, dj(result))
     except Exception as e:
         logger.error('Unable to parse output of ping: %s', e)
@@ -527,7 +527,7 @@ def main_loop(host_dict):
     :return: Nope
     """
     checklist = []
-    logger.info('Starting latency check for all hosts.')
+    logger.info('Starting RTB latency check.')
     for provider in host_dict:
         for region_major in config['region_filter']['major']:
             for region_minor in config['region_filter']['minor']:
@@ -544,7 +544,7 @@ def main_loop(host_dict):
     pool.map(check_and_send, checklist)
     pool.close()
     pool.join()
-    logger.info('Finished latency check.')
+    logger.info('Finished RTB latency check.')
 
 
 main_loop(build_host_dict())
