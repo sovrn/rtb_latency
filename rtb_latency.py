@@ -548,31 +548,3 @@ def main_loop(host_dict):
 
 
 main_loop(build_host_dict())
-
-sys.exit(0)
-
-# tests
-
-host_dict = build_host_dict()
-checklist = []
-for provider in host_dict:
-    for region_major in config['region_filter']['major']:
-        for region_minor in config['region_filter']['minor']:
-            for endpoint in host_dict[provider][region_major][region_minor]:
-                for protocol in config['check_types']:
-                    checklist.append({
-                        'endpoint': endpoint,
-                        'path': host_dict[provider]['path'],
-                        'protocol': protocol,
-                        'provider': provider,
-                        'region': region_major + '_' + region_minor
-                    })
-
-count = 0
-for check in checklist:
-    if check['protocol'] == 'icmp':
-        check_and_send(check)
-        count += 1
-    if count > 5:
-        break
-
