@@ -32,9 +32,6 @@
 	path = submodules/dnspython
 	url = https://github.com/rthalley/dnspython.git
 	tag = v1.15.0
-[submodule "submodules/ipaddr-py"]
-	path = submodules/ipaddr-py
-	url = https://github.com/google/ipaddr-py.git
 [submodule "submodules/netaddr"]
 	path = submodules/netaddr
 	url = https://github.com/drkjam/netaddr
