@@ -492,8 +492,7 @@ def send_graphite(
         graphite_connection.connect((graphite_host, graphite_port))
         graphite_connection.sendall(graphite_line)
     except Exception as e:
-        # logger.error(e)
-        pass
+        logger.error(e)
 
 
 def check_and_send(opt_dict):
