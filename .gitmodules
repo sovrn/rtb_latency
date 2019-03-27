@@ -1,40 +1,38 @@
-[submodule "submodules/requests"]
-	path = submodules/requests
-	url = https://github.com/requests/requests.git
-	tag = v2.18.4
-[submodule "submodules/python-ping"]
-	path = submodules/python-ping
-	url = https://github.com/samuel/python-ping
 [submodule "submodules/PyMySQL"]
 	path = submodules/PyMySQL
 	url = https://github.com/PyMySQL/PyMySQL.git
-	tag = v0.8.0
-[submodule "submodules/urllib3"]
-	path = submodules/urllib3
-	url = https://github.com/urllib3/urllib3
-	tag = 1.22
+	tag = v0.9.3
 [submodule "submodules/chardet"]
 	path = submodules/chardet
 	url = https://github.com/chardet/chardet
 	tag = 3.0.4
-[submodule "submodules/python-certifi"]
-	path = submodules/python-certifi
-	url = https://github.com/certifi/python-certifi.git
+[submodule "submodules/dnspython"]
+	path = submodules/dnspython
+	url = https://github.com/rthalley/dnspython.git
+	tag = v1.16.0
 [submodule "submodules/idna"]
 	path = submodules/idna
 	url = https://github.com/kjd/idna.git
-	tag = v2.6
+	tag = v2.8
+[submodule "submodules/ipaddr-py"]
+	path = submodules/ipaddr-py
+	url = https://github.com/google/ipaddr-py.git
 [submodule "submodules/ipwhois"]
 	path = submodules/ipwhois
 	url = https://github.com/secynic/ipwhois.git
 	tag = v1.0.0
-[submodule "submodules/dnspython"]
-	path = submodules/dnspython
-	url = https://github.com/rthalley/dnspython.git
-	tag = v1.15.0
-[submodule "submodules/ipaddr-py"]
-	path = submodules/ipaddr-py
-	url = https://github.com/google/ipaddr-py.git
 [submodule "submodules/netaddr"]
 	path = submodules/netaddr
 	url = https://github.com/drkjam/netaddr
+	tag = rel-0.7.x
+[submodule "submodules/python-certifi"]
+	path = submodules/python-certifi
+	url = https://github.com/certifi/python-certifi.git
+[submodule "submodules/requests"]
+	path = submodules/requests
+	url = https://github.com/requests/requests.git
+	tag = v2.21.0
+[submodule "submodules/urllib3"]
+	path = submodules/urllib3
+	url = https://github.com/urllib3/urllib3
+	tag = 1.23
