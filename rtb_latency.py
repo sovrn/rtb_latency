@@ -1,11 +1,12 @@
 #!/usr/bin/python2
 
+import certifi
 import ipwhois
 import itertools
 import json
 import logging
-import os
 import netaddr
+import os
 import pymysql
 import re
 import requests
@@ -15,6 +16,7 @@ import sys
 import threading
 import time
 import urllib2
+import urllib3
 import uuid
 import Queue
 from multiprocessing import Pool
@@ -22,7 +24,7 @@ from multiprocessing.dummy import Pool as ThreadPool
 
 logging.basicConfig(format='rtb_latency %(funcName)s %(levelname)s %(message)s')
 logger = logging.getLogger('rtb_latency')
-
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def dj(_dict):
     """Converts dicts to JSON and safely handles non-serializable items"""
@@ -59,7 +61,6 @@ def genconfig():
 
 config = genconfig()
 logger.setLevel(logging.getLevelName(config['log_level']))
-
 
 def extract_hostname(string):
     """
@@ -209,9 +210,9 @@ def genbid():
                 "lat": config['geoip']['latitude'],
                 "lon": config['geoip']['longitude'],
                 "country": config['geoip']['country_code'],
-                "region": config['geoip']['region_code'],
+                "region": config['geoip']['region'],
                 "city": config['geoip']['city'],
-                "zip": str(config['geoip']['zip_code']),
+                "zip": str(config['geoip']['postal_code']),
                 "type": 2
             },
             "language": "en",
@@ -224,7 +225,6 @@ def genbid():
         },
         "at": 2
     })
-
 
 def net_debug(host):
     """
@@ -320,9 +320,6 @@ def rtb_latency(host, path):
     :param host: Hostname as string
     :return: Timestamp as float of seconds or nothing
     """
-    if netaddr.valid_ipv4(host):
-        logger.debug('Skipping RTB check for naked IP %s', host)
-        return
     logger.debug('Sending test bid to: %s', host)
     for proto in ['https://', 'http://']:
         try:
@@ -333,7 +330,8 @@ def rtb_latency(host, path):
                 proto + host + path,
                 data=genbid(),
                 timeout=config['timeout'],
-                headers=config['rtb']['headers'])
+                headers=config['rtb']['headers'],
+                verify=False)
             end = time.time()
             logger.debug('Request time for host %s: %s', host, end - start)
             if req.status_code <= 204 and req.status_code >= 200:
@@ -494,7 +492,8 @@ def send_graphite(
         graphite_connection.connect((graphite_host, graphite_port))
         graphite_connection.sendall(graphite_line)
     except Exception as e:
-        logger.error(e)
+        # logger.error(e)
+        pass
 
 
 def check_and_send(opt_dict):
@@ -504,6 +503,9 @@ def check_and_send(opt_dict):
     :param opt_dict: dictionary containing the keys and values that are requested below:
     :returns: nothing
     """
+    if opt_dict['protocol'] == 'rtb' and netaddr.valid_ipv4(opt_dict['endpoint']):
+        logger.debug('Skipping RTB check for naked IP %s', opt_dict['endpoint'])
+        return
     latency = average_latency(
         host=opt_dict['endpoint'],
         path=opt_dict['path'],

@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # Pull in submodules
-git pull --all
-git submodule init
-git submodule update --recursive
+# git pull --all
+# git submodule init
+# git submodule update --recursive --remote
 
 # Link submodules so that the main script knows how to find the packages
 ln -sfv rtb_latency.py __main__.py
