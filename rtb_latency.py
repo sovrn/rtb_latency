@@ -1,11 +1,9 @@
 #!/usr/bin/python2
 
-import certifi
 import ipwhois
 import itertools
 import json
 import logging
-import netaddr
 import os
 import pymysql
 import re
@@ -16,23 +14,13 @@ import sys
 import threading
 import time
 import urllib2
-import urllib3
 import uuid
 import Queue
 from multiprocessing import Pool
 from multiprocessing.dummy import Pool as ThreadPool
 
 logging.basicConfig(format='rtb_latency %(funcName)s %(levelname)s %(message)s')
-logger = logging.getLogger('rtb_latency')
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-def dj(_dict):
-    """Converts dicts to JSON and safely handles non-serializable items"""
-    return json.dumps(
-        _dict,
-        default=lambda o: 'ERROR: Item not JSON serializable',
-        sort_keys=True,
-        indent=3)
+logger = logging.getLogger(__file__)
 
 
 def genconfig():
@@ -46,21 +34,31 @@ def genconfig():
     try:
         with open('config.json', 'r') as config_file:
             config = json.loads(config_file.read())
-    except Exception as e:
-        logger.error('Unable to read config file:\n%s', e)
+    except Exception:
+        logger.exception('Trouble opening config file.')
         sys.exit(1)
-    logger.debug('Requesting GeoIP from geoiplookup.io...')
+    # Get public IP
+    logger.debug('Requesting public IP from ipify.org...')
     try:
-        request = requests.get('https://json.geoiplookup.io/')
-        config['geoip'] = request.json()
-        config['public_ip'] = config['geoip']['ip']
-    except Exception as e:
-        logger.error('Error obtaining GeoIP from geoiplookup.io:\n%s', e)
+        pubiprequest = urllib2.urlopen(url='https://api.ipify.org')
+        config['public_ip'] = pubiprequest.read()
+        pubiprequest.close()
+    except Exception:
+        logger.exception('Error getting public IP from ipify.org.')
+#    # Get GeoIP info
+#    logger.debug('Requesting GeoIP from freegeoip.net...')
+#    try:
+#        geoiprequest = urllib2.urlopen(url='http://freegeoip.net/json/' + config['public_ip'])
+#        config['geoip'] = json.loads(geoiprequest.read())
+#        geoiprequest.close()
+#    except Exception:
+#        logger.exception('Error getting GeoIP from freegeoip.net.')
     return config
 
 
 config = genconfig()
 logger.setLevel(logging.getLevelName(config['log_level']))
+
 
 def extract_hostname(string):
     """
@@ -210,9 +208,9 @@ def genbid():
                 "lat": config['geoip']['latitude'],
                 "lon": config['geoip']['longitude'],
                 "country": config['geoip']['country_code'],
-                "region": config['geoip']['region'],
+                "region": config['geoip']['region_code'],
                 "city": config['geoip']['city'],
-                "zip": str(config['geoip']['postal_code']),
+                "zip": str(config['geoip']['zip_code']),
                 "type": 2
             },
             "language": "en",
@@ -226,66 +224,53 @@ def genbid():
         "at": 2
     })
 
-def net_debug(host):
+
+def net_debug(ip, host):
     """
     Gather path information about a remote IP for debugging
 
     :param ip: IP address to check path to.
     :return: JSON dictionary
     """
-    if netaddr.valid_ipv4(host):
-        ip = host
+    try:
         try:
-            hostname = socket.gethostbyaddr(host)[0]
-        except:
-            hostname = host
-    else:
-        ip = socket.gethostbyname(host)
-        hostname = host
-    try:
-        as_remote = ipwhois.asn.IPASN(ipwhois.net.Net(ip)).lookup()
-        as_local = ipwhois.asn.IPASN(ipwhois.net.Net(config['public_ip'])).lookup()
-    except Exception as e:
-        as_local = {
-            'asn': None,
-            'asn_cidr': None,
-        }
-        as_remote = {
-            'asn': None,
-            'asn_cidr': None,
-            'asn_description': None,
-        }
-        logger.error('Unable to determine ASN for IP: %s\n%s', ip, e)
-    try:
-        command = ['traceroute', '-A', '-I', '-e', '-N 1', '-q 1', str(ip)]
-        cmd = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            universal_newlines=True)
-        output = cmd.communicate()
-        retcode = cmd.poll()
-        if retcode == 0:
-            traceroute = output[0].split('\n')
+            as_remote = ipwhois.asn.IPASN(ipwhois.net.Net(ip)).lookup()
+            as_local = ipwhois.asn.IPASN(ipwhois.net.Net(config['public_ip'])).lookup()
+        except Exception:
+            as_local = {
+                'asn': None,
+                'asn_cidr': None,
+            }
+            as_remote = {
+                'asn': None,
+                'asn_cidr': None,
+                'asn_description': None,
+            }
+            logger.exception('Unable to determine ASN for IP: ' + ip)
+        try:
+            traceroute = subprocess.check_output([
+                'traceroute', '-A', '-I', '-e', '-N 1', '-q 1', ip
+            ]).split('\n')
             del traceroute[0]
             del traceroute[-1]
-        else:
-            raise subprocess.CalledProcessError(retcode, command, output=output)
-    except Exception as e:
-        logger.error('Traceroute failed for %s:\n%s', ip, e)
-        logger.debug('command: %s\nstdout:\n%s\nstderr:\n%s', command, output[0], output[1])
-        traceroute = []
-    logger.warn('for host: %s\n%s', host, dj({
-        'local_asn': as_local['asn'],
-        'local_asn_cidr': as_local['asn_cidr'],
-        'local_ip': config['public_ip'],
-        'remote_asn': as_remote['asn'],
-        'remote_asn_cidr': as_remote['asn_cidr'],
-        'remote_asn_descr': as_remote['asn_description'],
-        'remote_hostname': hostname,
-        'remote_ip': ip,
-        'traceroute': traceroute
-    }))
+        except Exception:
+            logger.exception('Traceroute failed for ' + ip)
+            traceroute = []
+        results = json.dumps({
+            'local_asn': as_local['asn'],
+            'local_asn_cidr': as_local['asn_cidr'],
+            'local_ip': config['public_ip'],
+            'remote_asn': as_remote['asn'],
+            'remote_asn_cidr': as_remote['asn_cidr'],
+            'remote_asn_descr': as_remote['asn_description'],
+            'remote_hostname': host,
+            'remote_ip': ip,
+            'traceroute': traceroute
+        })
+        return results
+    except Exception:
+        logger.exception('Could not retrieve net debugging info for ' + ip)
+        return {}
 
 
 def http_get_latency(host):
@@ -296,91 +281,69 @@ def http_get_latency(host):
     :return: Timestamp as float of seconds or nothing
     """
     logger.debug('Sending HTTP GET to: ' + extract_hostname(host))
-    for proto in ['https://', 'http://']:
-        try:
-            s = requests.Session()
-            s.mount(proto, requests.adapters.HTTPAdapter(max_retries=1))
-            start = time.time()
-            req = s.get(
-                proto + host,
-                timeout=config['timeout'])
-            end = time.time()
-            if req.status_code < 400:
-                return end - start
-            else:
-                logger.error('Request failed to: %s code=%s text=%s', host, req.status_code, req.text)
-        except Exception as e:
-            logger.error('Request failed to: %s\n%s', host, e)
+    try:
+        s = requests.Session()
+        s.mount('http://', requests.adapters.HTTPAdapter(max_retries=1))
+        s.mount('https://', requests.adapters.HTTPAdapter(max_retries=1))
+        start = time.time()
+        req = s.get(host, timeout=config['timeout'])
+        end = time.time()
+        if req.status_code <= 204 or req.status_code >= 200:
+            return end - start
+        else:
+            logger.error('Request failed to: ' + host + ' code=' + str(req.status_code) + ' text=' + str(req.text))
+    except Exception:
+        logger.exception('Request failed to: ' + host)
 
 
-def rtb_latency(host, path):
+def rtb_latency(host):
     """
     Sends a test RTB bid to host and returns latency.
 
     :param host: Hostname as string
     :return: Timestamp as float of seconds or nothing
     """
-    logger.debug('Sending test bid to: %s', host)
-    for proto in ['https://', 'http://']:
-        try:
-            s = requests.Session()
-            s.mount(proto, requests.adapters.HTTPAdapter(max_retries=1))
-            start = time.time()
-            req = s.post(
-                proto + host + path,
-                data=genbid(),
-                timeout=config['timeout'],
-                headers=config['rtb']['headers'],
-                verify=False)
-            end = time.time()
-            logger.debug('Request time for host %s: %s', host, end - start)
-            if req.status_code <= 204 and req.status_code >= 200:
-                return end - start
-            else:
-                logger.error('Request failed to: %s code=%s text=%s', host, req.status_code, req.text)
-        except Exception as e:
-            logger.error('Request failed to: %s\n%s', host, e)
-
-
-def ping(host='google.com', number=1, wait_sec=1):
-    """
-    Ping host and format output
-
-    :param host: hostname or IP as string
-    :param number: ping count
-    :param wait_sec: ping timeout
-    :return: dict
-    """
-    logger.debug('Pinging host: %s', host)
-    result = {
-        'host': host,
-        'count': number
-    }
+    logger.debug('Sending test bid to: ' + extract_hostname(host))
     try:
-        command = ['ping', '-c', str(number), '-W', str(wait_sec), str(host)]
-        cmd = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            universal_newlines=True)
-        output = cmd.communicate()
-    except Exception as e:
-        logger.warn('Error calling ping:\n%s', e)
-        logger.debug('command: %s\nstdout:\n%s\nstderr:\n%s', command, output[0], output[1])
+        s = requests.Session()
+        s.mount('http://', requests.adapters.HTTPAdapter(max_retries=1))
+        s.mount('https://', requests.adapters.HTTPAdapter(max_retries=1))
+        start = time.time()
+        req = s.post(
+            host,
+            data=genbid(),
+            timeout=config['timeout'],
+            headers=config['rtb']['headers']
+        )
+        end = time.time()
+        if req.status_code <= 204 or req.status_code >= 200:
+	    delta = float (end - start)
+            return delta 
+        else:
+            logger.error('Request failed to: ' + host + ' code=' + str(req.status_code) + ' text=' + str(req.text))
+    except Exception:
+        logger.exception('Request failed to: ' + host)
+
+
+def ping(server='example.com', count=1, wait_sec=1):
+    """
+    :rtype: dict or None
+    """
+    cmd = "ping -c {} -W {} {}".format(count, wait_sec, server).split(' ')
     try:
-        for line in output[0].split('\n'):
-            if 'round-trip' in line:
-                timing = line.split()[3].split('/')
-                result['avg'] = float(timing[1]) / 1000
-                result['dev'] = float(timing[3]) / 1000
-                result['max'] = float(timing[2]) / 1000
-                result['min'] = float(timing[0]) / 1000
-            if 'packets' in line:
-                result['loss'] = line.split()[5]
-        logger.debug('Ping result for host %s:\n%s', host, dj(result))
+        output = subprocess.check_output(cmd).decode().strip()
+        lines = output.split("\n")
+        loss = float (lines[-2].split(',')[2].split()[0].split('%')[0])
+        timing = lines[-1].split()[3].split('/')
+        min = float (timing[0])
+        avg = float (timing[1])
+        max = float (timing[2])
+        mdev = float (timing[3])
+        return [min, avg, max, mdev, loss]
+
     except Exception as e:
-        logger.error('Unable to parse output of ping: %s', e)
-    return result
+        print(e)
+        return None
 
 
 def icmp_latency(host):
@@ -391,10 +354,19 @@ def icmp_latency(host):
     :return: Timestamp as float of seconds or nothing
     """
     try:
-        result = ping(host=host, number=1, wait_sec=1)
-        return result['avg']
-    except:
-        pass
+	r = ping(server=host, count=1, wait_sec=1)
+
+        logger.debug('Pinging host: ' + host + ' [Min/Avg/Max/Loss] or None: ' + str(r))
+
+	if r is None :
+	  return float(-1)
+
+	else:
+	  result = float(r[1]) / 1000
+          return result
+
+    except Exception:
+        logger.exception('Ping failed to: ' + host)
 
 
 def average_latency(host, protocol, path):
@@ -407,37 +379,38 @@ def average_latency(host, protocol, path):
     :param protocol: protocol string
     :return: average latency in seconds as float
     """
+    ip = socket.gethostbyname(extract_hostname(host))
     latencies = []
     for count in range(0, config['check_count']):
         if protocol == "icmp":
-            result = icmp_latency(host)
-            if result:
+            result = icmp_latency(ip)
+            if result != float(-1):
                 latencies.append(result)
             else:
                 break
         elif protocol == "rtb":
-            result = rtb_latency(host, path)
-            if result:
-                latencies.append(result)
-            else:
-                break
+            if re.match("[A-Za-z]", host) is not None:
+                result = rtb_latency('http://' + host + path)
+                if result != float(-1):
+                    latencies.append(result)
+                else:
+                    break
         elif protocol == "get":
-            result = http_get_latency(host)
+            result = http_get_latency('http://' + ip + path)
             if result:
                 latencies.append(result)
             else:
                 break
         else:
-            logger.error('Unknown protocol: %s (count=%s)', protocol, count)
+            logger.error(str(count) + ' Unknown protocol: ' + protocol)
             return
     try:
         avg_latency = sum(latencies) / float(len(latencies))
-    except Exception as e:
-        logger.debug(e)
+    except:
         avg_latency = -1
-    if avg_latency > config['latency_warn'] or avg_latency == -1:
-        logger.warn('Latency to %s is %ss.', host, str(avg_latency))
-        net_debug(host)
+
+    if avg_latency > config['latency_warn']:
+        logger.warn('latency=' + str(avg_latency) + 's ' + net_debug(ip, host))
     return avg_latency
 
 
@@ -472,7 +445,7 @@ def send_graphite(
             clean_latency = str(latency)
         else:
             # Convert float of seconds to int of milliseconds
-            clean_latency = str(int(latency * 1000))
+            clean_latency = str(round(latency * 1000, 2))
         # Construct line
         graphite_line = ' '.join([
             '.'.join([
@@ -491,8 +464,8 @@ def send_graphite(
         graphite_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         graphite_connection.connect((graphite_host, graphite_port))
         graphite_connection.sendall(graphite_line)
-    except Exception as e:
-        logger.error(e)
+    except Exception:
+        logger.exception('Graphite exception')
 
 
 def check_and_send(opt_dict):
@@ -502,14 +475,14 @@ def check_and_send(opt_dict):
     :param opt_dict: dictionary containing the keys and values that are requested below:
     :returns: nothing
     """
-    if opt_dict['protocol'] == 'rtb' and netaddr.valid_ipv4(opt_dict['endpoint']):
-        logger.debug('Skipping RTB check for naked IP %s', opt_dict['endpoint'])
-        return
     latency = average_latency(
         host=opt_dict['endpoint'],
         path=opt_dict['path'],
         protocol=opt_dict['protocol']
     )
+    if latency == float(-1) and opt_dict['protocol'] == "rtb":
+        return
+
     send_graphite(
         endpoint=opt_dict['endpoint'],
         latency=latency,
@@ -528,7 +501,7 @@ def main_loop(host_dict):
     :return: Nope
     """
     checklist = []
-    logger.info('Starting RTB latency check.')
+    logger.info('Starting latency check for all hosts.')
     for provider in host_dict:
         for region_major in config['region_filter']['major']:
             for region_minor in config['region_filter']['minor']:
@@ -545,7 +518,7 @@ def main_loop(host_dict):
     pool.map(check_and_send, checklist)
     pool.close()
     pool.join()
-    logger.info('Finished RTB latency check.')
+    logger.info('Finished latency check.')
 
 
 main_loop(build_host_dict())
