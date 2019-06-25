@@ -39,7 +39,7 @@ If you use Grafana for your Graphite dashboards, there is a dashboard template u
     - `minor`: The sub-region(s) of your geographic area. This should be one or more minor regions from `regions` as a list. There is a special value of `"star"` that means everything for the given major region.
   - `check_types` specifies the types of checks that will be performed against all hosts. Currently, the options are as follows:
     - `rtb`: Sends a test bid compliant with OpenRTB 2.3.
-    - `get`: Performs an HTTP GET request.
+    - `http`: Performs an HTTP GET request.
     - `icmp`: Performs an ICMP ping.
   - `rtb`: Can be omitted if you are not performing an OpenRTB check. See the `RTB Example Bid` section for what these values map to.
   - `public_ip`: A default set of values if your public IP cannot be detected.
