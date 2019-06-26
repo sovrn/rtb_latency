@@ -26,7 +26,7 @@ if sys.version_info[0] < 3 and sys.version_info[1] < 5:
   sys.exit(1)
 
 logging.basicConfig(format='%(funcName)s %(levelname)s %(message)s')
-log = logging.getLogger(__file__)
+log = logging.getLogger('rtb_latency')
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
@@ -50,8 +50,8 @@ class Config:
                         help='Check single host instead of full suite of checks.')
     parser.add_argument('--protocol', default='RTB',
                         help='Specify RTB, HTTP, or RTB for a single host check.')
-    parser.add_argument('--timeout', default=0.5, type=float,
-                        help='Specify timeout for a single host check as a float of seconds. Default=0.5')
+    parser.add_argument('--timeout', default=1, type=float,
+                        help='Specify timeout for a single host check as a float of seconds. Default=1')
     parser.add_argument('--path', default='/',
                         help='Path for HTTP and RTB checks. Default=./config.json')
     parser.add_argument('--configfile', default='config.json',
@@ -82,6 +82,39 @@ class Config:
   def rconf(self):
     """Returns a JSON string of self.config"""
     return self.config
+
+
+class ReportingDB:
+  def __init__(self):
+    self.connect()
+  def connect(self):
+    self.conn = pymysql.connect(
+      host=config['reporting_db']['hostname'],
+      user=config['reporting_db']['username'],
+      passwd=config['reporting_db']['password'],
+      database=config['reporting_db']['database'])
+  def send_metric(self, ip, agent_hostname, remote_hostname, protocol, latency, timestamp):
+    try:
+      query = """
+        INSERT INTO %s.metrics
+        (ip, agent_hostname, remote_hostname, protocol, latency, `timestamp`)
+        VALUES('%s', '%s', '%s', '%s', %s, '%s');""" % \
+        (config['reporting_db']['database'], ip, agent_hostname, remote_hostname, protocol, latency, timestamp)
+      log.debug(query)
+      with self.conn.cursor() as cursor:
+        cursor.execute(query)
+      self.conn.commit()
+      log.debug('Successfully sent metrics to reporting db.')
+    except Exception as e:
+      log.error('Failed to send metrics to reporting db.')
+      log.debug(e, exc_info=True)
+  def close(self):
+    try:
+      self.conn.close()
+      log.debug('Closed connection to ReportingDB.')
+    except Exception as e:
+      log.error('Failed to close connection to reporting db.')
+      log.debug(e, exc_info=True)
 
 
 config = Config().rconf()
@@ -162,13 +195,9 @@ def build_host_dict():
                     passwd=config['load_hosts'][id]['mysql_pass'],
                     database=config['load_hosts'][id]['mysql_db']
                 ))
-                result_count = mysql_conn.execute(
-                    config['load_hosts'][id]['mysql_query']
-                )
-                result_count
+                mysql_conn.execute(config['load_hosts'][id]['mysql_query'])
                 result_dict = mysql_conn.fetchall()
-                for id, row in enumerate(result_dict):
-                    row
+                for id, _ in enumerate(result_dict):
                     provider = result_dict[id]['provider']
                     if provider not in checks:
                         checks[provider] = {}
@@ -182,8 +211,9 @@ def build_host_dict():
                                 region_major, region_minor = region.split('_')
                                 provider_host = extract_hostname(result_dict[id][region])
                                 checks[provider]['path'] = extract_path(result_dict[id][region])
-                                _, _, provider_endpoints = socket.gethostbyname_ex(provider_host)
-                                provider_endpoints.append(provider_host)
+                                # _, _, provider_endpoints = socket.gethostbyname_ex(provider_host)
+                                # provider_endpoints.append(provider_host)
+                                provider_endpoints = [provider_host]
                                 for endpoint in provider_endpoints:
                                     if endpoint not in checks[provider][region_major][region_minor]:
                                         checks[provider][region_major][region_minor].append(endpoint)
@@ -259,6 +289,9 @@ def net_debug(host):
     :param ip: IP address to check path to.
     :return: JSON dictionary
     """
+    if 'linux' not in sys.platform:
+      log.debug('Skipping net_debug for platform: %s', sys.platform)
+      return
     if netaddr.valid_ipv4(host):
         ip = host
         try:
@@ -363,9 +396,10 @@ def rtb_latency(host, path):
             if req.status_code <= 204 and req.status_code >= 200:
                 return end - start
             else:
-                log.error('Request failed to: %s code=%s text=%s', host, req.status_code, req.text)
+                log.error('Request failed to: %s code=%s', host, req.status_code)
+                log.debug('text=%s', req.text)
         except Exception as e:
-            log.error('Request failed to: %s\n%s', host)
+            log.error('Request failed to: %s', host)
             log.debug(e, exc_info=True)
 
 
@@ -461,8 +495,8 @@ def average_latency(host, protocol, path='/'):
         avg_latency = sum(latencies) / float(len(latencies))
     except Exception as e:
         log.debug(e)
-        avg_latency = -1
-    if avg_latency > config['latency_warn'] or avg_latency == -1:
+        avg_latency = 1
+    if avg_latency > config['latency_warn']:
         log.warn('Latency to %s is %ss.', host, str(avg_latency))
         net_debug(host)
     return avg_latency
@@ -522,31 +556,45 @@ def send_graphite(
         log.error(e)
 
 
-def check_and_send(opt_dict):
-    """
-    Get average latency and ship it to Graphite. This is needed for multithreading.
+def check_and_send(check):
+  """
+  Get average latency and ship it to Graphite. This is needed for multithreading.
 
-    :param opt_dict: dictionary containing the keys and values that are requested below:
-    :returns: nothing
-    """
-    if opt_dict['protocol'] == 'rtb' and netaddr.valid_ipv4(opt_dict['endpoint']):
-        log.debug('Skipping RTB check for naked IP %s', opt_dict['endpoint'])
-        return opt_dict
-    latency = average_latency(
-        host=opt_dict['endpoint'],
-        path=opt_dict['path'],
-        protocol=opt_dict['protocol'])
-    # send_graphite(
-    #     endpoint=opt_dict['endpoint'],
-    #     latency=latency,
-    #     protocol=opt_dict['protocol'],
-    #     provider=opt_dict['provider'],
-    #     remote_region=opt_dict['region'])
-    return opt_dict
-
-
-def send_report():
-  pass
+  :param check: dictionary containing the keys and values that are requested below:
+  :returns: check
+  """
+  reportingdb = ReportingDB()
+  check['latencies'] = {
+    check['endpoint']: average_latency(
+      host=check['endpoint'],
+      path=check['path'],
+      protocol=check['protocol'])
+  }
+  for ip in socket.gethostbyname_ex(check['endpoint'])[2]:
+    if check['protocol'] == 'rtb' and netaddr.valid_ipv4(check['endpoint']):
+      log.debug('Skipping RTB check for naked IP %s', check['endpoint'])
+      continue
+    check['latencies'][ip] = average_latency(
+      host=ip,
+      path=check['path'],
+      protocol=check['protocol'])
+  for endpoint, latency in check['latencies'].items():
+    send_graphite(
+      endpoint=endpoint,
+      latency=latency,
+      protocol=check['protocol'],
+      provider=check['provider'],
+      remote_region=check['region'])
+    if netaddr.valid_ipv4(endpoint) and not netaddr.valid_ipv4(check['endpoint']):
+      reportingdb.send_metric(
+        ip=endpoint,
+        agent_hostname=socket.getfqdn(),
+        remote_hostname=check['endpoint'],
+        protocol=check['protocol'],
+        latency=latency,
+        timestamp=time.strftime('%Y-%m-%d %H:%M:%S'))
+  reportingdb.close()
+  return check
 
 
 def main_loop(host_dict):
@@ -564,21 +612,21 @@ def main_loop(host_dict):
       for region_minor in config['region_filter']['minor']:
         for endpoint in host_dict[provider][region_major][region_minor]:
           for protocol in config['check_types']:
-            checklist.append({
+            check = {
               'endpoint': endpoint,
               'path': host_dict[provider]['path'],
               'protocol': protocol,
               'provider': provider,
-              'region': region_major + '_' + region_minor})
+              'region': region_major + '_' + region_minor}
+            log.debug(dj(check))
+            checklist.append(check)
   with concurrent.futures.ThreadPoolExecutor(max_workers=config['threads']) as executor:
     # Create dynamic dictionary with all pull operations that the workers can consume
     checks = {executor.submit(check_and_send, check): check for check in checklist}
     # Run the dictionary and iterate over the results
     for check in concurrent.futures.as_completed(checks):
       try:
-        # Merge the results into master dictionary
-        # hosts = {**hosts, **provider.result()}
-        log.debug('Check completed:\n%s', dj(check))
+        log.debug('Check completed:\n%s', dj(check.result()))
       except Exception as trace:
         log.exception('Error executing subthread:\n%s', trace)
   log.info('Finished RTB latency check.')
