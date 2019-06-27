@@ -12,6 +12,7 @@ import os
 import pymysql
 import re
 import requests
+import signal
 import socket
 import subprocess
 import sys
@@ -88,11 +89,16 @@ class ReportingDB:
   def __init__(self):
     self.connect()
   def connect(self):
-    self.conn = pymysql.connect(
-      host=config['reporting_db']['hostname'],
-      user=config['reporting_db']['username'],
-      passwd=config['reporting_db']['password'],
-      database=config['reporting_db']['database'])
+    log.debug('Opening connection to reporting DB')
+    try:
+      self.conn = pymysql.connect(
+        host=config['reporting_db']['hostname'],
+        user=config['reporting_db']['username'],
+        passwd=config['reporting_db']['password'],
+        database=config['reporting_db']['database'])
+    except Exception as e:
+      log.error('Unable to connect to reporting DB')
+      log.debug(e, exc_info=True)
   def send_metric(self, ip, agent_hostname, remote_hostname, protocol, latency, timestamp):
     try:
       query = """
@@ -476,6 +482,7 @@ def average_latency(host, protocol, path='/'):
                 latencies.append(result)
             else:
                 break
+            time.sleep(0.5)
         elif protocol == "rtb":
             result = rtb_latency(host, path)
             if result:
@@ -563,7 +570,11 @@ def check_and_send(check):
   :param check: dictionary containing the keys and values that are requested below:
   :returns: check
   """
-  reportingdb = ReportingDB()
+  try:
+    config['reporting_db']
+    reportingdb = ReportingDB()
+  except Exception:
+    reportingdb = False
   check['latencies'] = {
     check['endpoint']: average_latency(
       host=check['endpoint'],
@@ -585,15 +596,18 @@ def check_and_send(check):
       protocol=check['protocol'],
       provider=check['provider'],
       remote_region=check['region'])
-    if netaddr.valid_ipv4(endpoint) and not netaddr.valid_ipv4(check['endpoint']):
-      reportingdb.send_metric(
-        ip=endpoint,
-        agent_hostname=socket.getfqdn(),
-        remote_hostname=check['endpoint'],
-        protocol=check['protocol'],
-        latency=latency,
-        timestamp=time.strftime('%Y-%m-%d %H:%M:%S'))
-  reportingdb.close()
+    if reportingdb \
+      and netaddr.valid_ipv4(endpoint) \
+      and not netaddr.valid_ipv4(check['endpoint']):
+        reportingdb.send_metric(
+          ip=endpoint,
+          agent_hostname=socket.getfqdn(),
+          remote_hostname=check['endpoint'],
+          protocol=check['protocol'],
+          latency=latency,
+          timestamp=time.strftime('%Y-%m-%d %H:%M:%S'))
+  if reportingdb:
+    reportingdb.close()
   return check
 
 
@@ -620,15 +634,21 @@ def main_loop(host_dict):
               'region': region_major + '_' + region_minor}
             log.debug(dj(check))
             checklist.append(check)
+    #         break
+    #       break
+    #     break
+    #   break
+    # break
   with concurrent.futures.ThreadPoolExecutor(max_workers=config['threads']) as executor:
     # Create dynamic dictionary with all pull operations that the workers can consume
     checks = {executor.submit(check_and_send, check): check for check in checklist}
     # Run the dictionary and iterate over the results
     for check in concurrent.futures.as_completed(checks):
       try:
-        log.debug('Check completed:\n%s', dj(check.result()))
+        result = check.result()
+        log.debug('Check completed:\n%s', dj(result))
       except Exception as trace:
-        log.exception('Error executing subthread:\n%s', trace)
+        log.exception('Error executing subthread:\n%s\n%s', trace, result)
   log.info('Finished RTB latency check.')
 
 
