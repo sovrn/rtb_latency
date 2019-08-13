@@ -111,3 +111,11 @@ ENV/
 hosts_private.json
 config.json
 .DS_Store
+
+
+#Added by cargo
+#
+#already existing elements are commented out
+
+/target
+**/*.rs.bk

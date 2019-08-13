@@ -21,6 +21,8 @@ import time
 import urllib3
 import uuid
 
+# TODO https://stackoverflow.com/questions/54011552/any-concurrent-futures-timeout-that-actually-works
+
 # Enforce Python version
 if sys.version_info[0] < 3 and sys.version_info[1] < 5:
   print('ERROR: This script requires Python 3.5 or greater, exiting.')
