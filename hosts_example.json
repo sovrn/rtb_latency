@@ -1,5 +1,10 @@
 {
-   "google": {
-      "amer_central": "http://google.com"
-   }
+  "google-eb": {
+    "amer": {
+      "west": [
+        "74.125.80.78"
+      ]
+    },
+    "path": "/"
+  }
 }

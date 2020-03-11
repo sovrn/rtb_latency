@@ -170,6 +170,7 @@ def build_host_dict():
                 logger.exception('Could not load hosts from MySQL.')
         else:
             logger.error('Unknown source type for hosts: ' + source)
+    logger.debug('Checks dict:\n%s', dj(checks))
     return checks
 
 
@@ -488,9 +489,9 @@ def send_graphite(
         ])
         logger.debug('Graphite line: ' + graphite_line)
         # Send line
-        graphite_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        graphite_connection.connect((graphite_host, graphite_port))
-        graphite_connection.sendall(graphite_line)
+        # graphite_connection = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # graphite_connection.connect((graphite_host, graphite_port))
+        # graphite_connection.sendall(graphite_line)
     except Exception as e:
         logger.error(e)
 
