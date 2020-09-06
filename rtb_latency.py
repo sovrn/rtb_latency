@@ -19,6 +19,7 @@ import urllib2
 import urllib3
 import uuid
 import Queue
+from datadog import initialize, statsd
 from multiprocessing import Pool
 from multiprocessing.dummy import Pool as ThreadPool
 
@@ -495,6 +496,57 @@ def send_graphite(
         logger.error(e)
 
 
+def send_statsd(
+            provider,
+            protocol,
+            latency,
+            endpoint,
+            remote_region,
+            statsd_host=config["statsd_host"],
+            statsd_port=config["statsd_port"],
+            statsd_metric=config["statsd_metric"]
+        ):
+    """
+    Send a latency metric to Datadog using DogStatsD.
+    Line format:
+      prefix.provider.remote_region.local_host.protocol latency_in_milliseconds timestamp
+    :param provider: provider name as string
+    :param protocol: protocol as string
+    :param latency: latency in seconds as float
+    :param remote_region: geographic region of remote system as string
+    :param statsd_host: statsd hostname as string
+    :param statsd_port: statsd port as int
+    :param statsd_prefix: statsd prefix as string
+    :return: Nope
+    """
+    options = {
+        'statsd_host':'127.0.0.1',
+        'statsd_port':8127
+    }
+    initialize(**options)
+
+    try:
+        if latency == float('-1'):
+            # Keep '-1' error values
+            clean_latency = str(latency)
+        else:
+            # Convert float of seconds to int of milliseconds
+            clean_latency = str(int(latency * 1000))
+        # Construct tags
+        tags=','.join([
+                "rtb_provider:" + graphite_safe(provider),
+                "rtb_region:" + graphite_safe(remote_region),
+                "rtb_endpoint:" + graphite_safe(endpoint),
+                "rtb_protocol:" + graphite_safe(protocol)
+            ])
+        logger.debug('statsd line: ' + statsd_line)
+        # Send line
+        # statsd.gauge(statsd_metric, clean_latency, tags)
+        print (statsd_metric, clean_latency, tags, sep=', ')
+    except Exception as e:
+        logger.error(e)
+
+
 def check_and_send(opt_dict):
     """
     Get average latency and ship it to Graphite. This is needed for multithreading.
@@ -511,6 +563,13 @@ def check_and_send(opt_dict):
         protocol=opt_dict['protocol']
     )
     send_graphite(
+        endpoint=opt_dict['endpoint'],
+        latency=latency,
+        protocol=opt_dict['protocol'],
+        provider=opt_dict['provider'],
+        remote_region=opt_dict['region']
+    )
+    send_statsd(
         endpoint=opt_dict['endpoint'],
         latency=latency,
         protocol=opt_dict['protocol'],
